@@ -1,4 +1,6 @@
 
+from imagezmq import ImageSender
+
 from .datamodel import Camera
 
 
@@ -8,7 +10,7 @@ def start_camera_stream(cameras: List[Camera]):
     cameras = load_cameras_from_dict(cfg.cameras)
 
     logger.info(f"initializing readers and senders...")
-    image_senders = [ImageZMQVideoStreamSender(hostname=cfg.host_name, port=cam.port) for cam in cameras]
+    image_senders = [ImageSender() for cam in cameras]
     input_readers = [CameraInputReader(cam) for cam in cameras]
 
     logger.info(f"starting streams...")
