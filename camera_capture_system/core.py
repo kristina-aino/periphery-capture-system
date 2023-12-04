@@ -1,68 +1,67 @@
+from logging import getLogger
+from datetime import datetime
+from typing import List
+from json import load
 
-from imagezmq import ImageSender
+from .camera import Camera, CameraInputReader
+from .zmqIO import ZMQPublisher
 
-from .datamodel import Camera
+#----------------------------------------
 
+logger = getLogger(__name__)
 
+#----------------------------------------
 
-def start_camera_stream(cameras: List[Camera]):
-
-    cameras = load_cameras_from_dict(cfg.cameras)
-
-    logger.info(f"initializing readers and senders...")
-    image_senders = [ImageSender() for cam in cameras]
-    input_readers = [CameraInputReader(cam) for cam in cameras]
-
-    logger.info(f"starting streams...")
-    try:
-        tasks = [process_camera_frames(cam, ir, ims, cfg.max_fail_counter) for cam, ir, ims in zip(cameras, input_readers, image_senders)]
-        asyncio.get_event_loop().run_until_complete(asyncio.gather(*tasks))
-    except:
-        logger.error(traceback.format_exc())
-    finally:
-        for ir, ims in zip(input_readers, image_senders):
-            ir.close()
-            ims.close()
-
-
-async def process_camera_frames(
-    camera: Camera,
-    input_reader: CameraInputReader, 
-    image_sender: ImageZMQVideoStreamSender,
-    max_fail_counter: int,
-    stop_event: asyncio.Event = None # for testing
-    ) -> None:
+def load_all_cameras_from_config(config_path: str = "./cameras_configs.json") -> List[Camera]:
     """
-        This function is used to read frames 
-        from the camera and send them to the image sender asynchronosly
+        Loads all cameras from a JSON configuration file.
+    """
+    with open(config_path, "r") as f:
+        cameras = load(f)
+    
+    return [Camera(**camera) for camera in cameras]
+
+class CameraPublisher(ZMQPublisher):
+    """
+        Publishes camera data to a ZMQ socket.
     """
     
-    fail_counter = 0
-    while input_reader.is_open():
-
-        # Capture frame
-        recording_dt = datetime.now()
-        ok, frame = await asyncio.to_thread(input_reader.read)
-        if not ok:
-            logger.warning(f"{camera.uuid} :: reader not ok for {fail_counter}/{max_fail_counter} frames ...")
-            fail_counter += 1
-            assert fail_counter <= max_fail_counter, f"{camera.uuid} :: no frame found for too long of a period"
-            continue
-        fail_counter = 0
-
-        # Send frame
-        packet = CameraFramePacket(
-            camera_uuid=camera.uuid,
-            frame=frame,
-            timestamp=recording_dt
-        )
-        await asyncio.to_thread(image_sender.send, packet)
-
-        # cecrd timedelta and log if not zero
-        ts_timedelta = datetime.now().timestamp() - recording_dt.timestamp()
-        if ts_timedelta > 0:
-            logger.debug(f"{camera.uuid} :: current_fps={1 / ts_timedelta}")
+    def __init__(
+        self,
+        camera: Camera,
+        host_name: str = "127.0.0.1",
+        port: int = 10000,
+        max_consec_reader_failures: int = 10):
         
-        # stop event for testing
-        if stop_event and stop_event.is_set():
-            break
+        super().__init__(host_name, port)
+        self.camera_reader = CameraInputReader(camera)
+        
+        self.max_consec_reader_failures = max_consec_reader_failures
+        
+    def start(self):
+        
+        while self.is_ok():
+
+            # try read frame and define metadata
+            start_read_ts = datetime.now().timestamp()
+            ok, frame = self.camera_reader.read()
+            end_read_ts = datetime.now().timestamp()
+
+            # count incorrect reads
+            if not ok:
+                logger.warning(f"{self.camera.uuid} :: reader not ok for {fail_counter}/{self.max_consec_reader_failures} frames ...")
+                fail_counter += 1
+                assert fail_counter <= self.max_consec_reader_failures, f"{self.camera.uuid} :: no frame found for too long of a period"
+                continue
+            fail_counter = 0
+            
+            #p publish frame and metadata
+            self.publish(frame, {
+                "start_read_timestamp": start_read_ts,
+                "end_read_timestamp": end_read_ts,
+                "camera_uuid": self.camera_reader.cam_uuid
+            })
+            
+    def is_ok(self):
+        return self.camera_reader.is_open() and not self.socket.closed and not self.context.closed
+

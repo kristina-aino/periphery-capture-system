@@ -1,24 +1,26 @@
-import logging
+from time import sleep
+from logging import getLogger
 import cv2
-import platform
-import time
-
-from pydantic import BaseModel, Field, Strict, PositiveInt, StrictStr, NonEmpty
+from platform import system
+from pydantic import BaseModel, Field, StrictStr, Strict
 from typing_extensions import Annotated
 
 # ------------------- Logging ------------------- #
 
-logger = logging.getLogger(__name__)
+logger = getLogger(__name__)
 
 # ------------------- Datamodel ------------------- #
 
+StrictNonEmptyStr = Annotated[StrictStr, Field(min_length=1), Strict()]
+
 class Camera(BaseModel):
-    id: Annotated[int, Strict(), Field(ge=0)] # index of the camera in the system (opencv index)
-    uuid: Annotated[StrictStr, NonEmpty]
-    width: Annotated[PositiveInt, Field(ge=640, le=3840), Strict()]
-    height: Annotated[PositiveInt, Field(ge=480, le=2160), Strict()]
-    fps: Annotated[PositiveInt, Field(ge=15, le=120), Strict()]
-    port: Annotated[PositiveInt, Field(ge=1024, le=65534), Strict()]
+    uuid: StrictNonEmptyStr # unique identifier for the camera
+    id: Annotated[int, Field(ge=0), Strict()] # index of the camera in the system (opencv index)
+    width: Annotated[int, Field(ge=640, le=3840), Strict()]
+    height: Annotated[int, Field(ge=480, le=2160), Strict()]
+    fps: Annotated[int, Field(ge=15, le=120), Strict()]
+    name: StrictNonEmptyStr
+    position: StrictNonEmptyStr
 
 # ------------------- OpenCV Camera Input Reader ------------------- #
 
@@ -31,12 +33,12 @@ CV2_BACKENDS = {
 class CameraInputReader:
     def __init__(self, camera: Camera):
         
-        logger.info(f"{camera.uuid} :: Initializing capture with backend {CV2_BACKENDS.get(platform.system(), cv2.CAP_ANY)} ...")
+        logger.info(f"{camera.uuid} :: Initializing capture with backend {CV2_BACKENDS.get(system(), cv2.CAP_ANY)} ...")
         logger.info(f"{camera.uuid} :: Camera information: {camera}")
         
         self.cam_uuid = camera.uuid
         
-        backend = CV2_BACKENDS.get(platform.system(), cv2.CAP_ANY)
+        backend = CV2_BACKENDS.get(system(), cv2.CAP_ANY)
         self.capture = cv2.VideoCapture(camera.id, backend)
         
         self.capture.set(cv2.CAP_PROP_FPS, camera.fps)
@@ -44,17 +46,6 @@ class CameraInputReader:
         self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, camera.height)
         
         self.check()
-        
-        # cv2.CAP_PROP_BRIGHTNESS # Brightness of the image (only for cameras).
-        # cv2.CAP_PROP_CONTRAST # Contrast of the image (only for cameras).
-        # cv2.CAP_PROP_SATURATION # Saturation of the image (only for cameras).
-        # cv2.CAP_PROP_HUE # Hue of the image (only for cameras).
-        # cv2.CAP_PROP_GAIN # Gain of the image (only for cameras).
-        # cv2.CAP_PROP_EXPOSURE # Exposure (only for cameras).
-        # cv2.CAP_PROP_CONVERT_RGB # Boolean flags indicating whether images should be converted to RGB.
-        # cv2.CAP_PROP_RECTIFICATION # Rectification flag for stereo cameras (note: only supported by DC1394 v 2.x backend currently).
-        # cv2.CAP_PROP_ISO_SPEED # ISO speed of the camera (only for cameras).
-        # cv2.CAP_PROP_BUFFERSIZE # Amount of frames stored in internal buffer memory (note: only supported by some camera drivers).
         
     def is_open(self):
         return self.capture.isOpened()
@@ -73,7 +64,7 @@ class CameraInputReader:
             if not self.capture.isOpened():
                 logger.warn(f"{self.cam_uuid} :: Capture is not open. Retrying...")
                 attempts += 1
-                time.sleep(0.33)
+                sleep(0.33)
                 
             logger.info(f"{self.cam_uuid} :: Appempting to retrieve frame ...")
             ret, _ = self.capture.read()
@@ -83,8 +74,7 @@ class CameraInputReader:
             
             logger.warn(f"{self.cam_uuid} :: Failed to receive valid image from camera. Retrying...")
             attempts += 1
-            time.sleep(0.33)
+            sleep(0.33)
             
         self.close()
         raise RuntimeError(f"{self.cam_uuid} :: Failed to receive image from camera after {max_attempts} attempts.")    
-

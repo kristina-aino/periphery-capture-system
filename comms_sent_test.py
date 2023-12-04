@@ -1,17 +1,16 @@
 import time
-import zmq
-from numpy import ndarray, uint8, ascontiguousarray, frombuffer
-from logging import warning, error
-from threading import Event
-from traceback import format_exc
+from asyncio import run as async_run
+from numpy import uint8
 
 from camera_capture_system.zmqIO import ZMQPublisher
 
-
-
 from numpy.random import randint
 
+
+
+
 publisher = ZMQPublisher()
+
 
 sends = 1000
 image = randint(0, 255, (1920, 1080, 3)).astype(uint8)

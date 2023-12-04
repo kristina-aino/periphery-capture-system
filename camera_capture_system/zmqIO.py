@@ -1,10 +1,14 @@
-import time
-import zmq
+from zmq.asyncio import Context, Socket
+from zmq import SNDMORE, SUBSCRIBE, SUB, PUB, Context
 from numpy import ndarray, uint8, ascontiguousarray, frombuffer
-from logging import warning, error
-from threading import Event
+from logging import getLogger
 from traceback import format_exc
 
+# ----------------------------------------
+
+logger = getLogger(__name__)
+
+# ----------------------------------------
 
 class ZMQPublisher():
     """
@@ -16,13 +20,15 @@ class ZMQPublisher():
         host_name: str = "127.0.0.1", 
         port=10000):
         
-        self.context = zmq.Context()
-        self.socket = self.context.socket(zmq.PUB)
+        self.context = Context()
+        self.socket = self.context.socket(PUB)
         self.socket.bind(f"tcp://{host_name}:{port}")
+        
+        logger.debug(f"ZMQPublisher bound to tcp://{host_name}:{port}")
 
     def publish(self, image: ndarray[uint8], data: dict):
         assert "image_data" not in data, "Key 'image_data' is reserved for image data"
-        
+
         data["image_data"] = {
             "dtype": str(image.dtype),
             "shape": image.shape
@@ -31,8 +37,10 @@ class ZMQPublisher():
         if not image.flags["C_CONTIGUOUS"]:
             image = ascontiguousarray(image)
         
-        self.socket.send_json(data, flags=zmq.SNDMORE)
-        self.socket.send(image, flags=0, copy=False, track=False)
+        self.socket.send_json(data, flags=SNDMORE)
+        self.socket.send(image, copy=False, track=False)
+        
+        logger.debug(f"ZMQPublisher published data: {data}")
 
 class ZMQSubscriber():
     """
@@ -45,22 +53,25 @@ class ZMQSubscriber():
         port=10000):
                 
         # ZMQ setup
-        self.context = zmq.Context()
-        self.socket = self.context.socket(zmq.SUB)
-        self.socket.setsockopt(zmq.SUBSCRIBE, b"")
+        self.context = Context()
+        self.socket = self.context.socket(SUB)
+        self.socket.setsockopt(SUBSCRIBE, b"")
         self.socket.connect(f"tcp://{host_name}:{port}")
-
-    def recieve(self):
-    
-        try:
-            data = self.socket.recv_json()
-            buf_image = self.socket.recv(copy=False, track=False)
-            
-            image = frombuffer(buf_image, dtype=data["image_data"]["dtype"])
-            image = image.reshape(data["image_data"]['shape'])
         
-        except:
-            error(format_exc())
-        finally:
-            self.socket.close()
-            self.context.term()
+        logger.debug(f"ZMQSubscriber connected to tcp://{host_name}:{port}")
+
+    def recieve(self) -> tuple[ndarray[uint8], dict]:
+        
+        if not self.socket.poll(1000):
+            logger.warning("No data recieved")
+            return None
+        
+        data = self.socket.recv_json()
+        buf_image = self.socket.recv(copy=False, track=False)
+        
+        logger.debug(f"ZMQSubscriber recieved data: {data}")
+        
+        image = frombuffer(buf_image, dtype=data["image_data"]["dtype"])
+        image = image.reshape(data["image_data"]['shape'])
+        
+        return image, data
