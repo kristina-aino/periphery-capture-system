@@ -28,10 +28,9 @@ def test_camera():
 @pytest.mark.parametrize(
     "uuid, id, width, height, fps, name, position",
     [
-        ("test", 0, 1920, 1080, 30, "test", "test"),  # Valid test data
         ("test", -1, 1920, 1080, 30, "test", "test"),  # Invalid test data (negative id)
         ("test", 0, 5000, 1080, 30, "test", "test"),  # Invalid test data (width out of range)
-        ("test", 0, 1920, 2000, 30, "test", "test"),  # Invalid test data (height out of range)
+        ("test", 0, 1920, 2500, 30, "test", "test"),  # Invalid test data (height out of range)
         ("test", 0, 1920, 1080, 10, "test", "test"),  # Invalid test data (fps out of range)
         ("", 0, 1920, 1080, 30, "test", "test"),  # Invalid test data (empty uuid)
         ("test", 0, 1920, 1080, 30, "", "test"),  # Invalid test data (empty name)

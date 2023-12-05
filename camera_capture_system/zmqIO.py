@@ -51,7 +51,7 @@ class ZMQSubscriber():
         self, 
         host_name: str = "127.0.0.1",
         port=10000):
-                
+        
         # ZMQ setup
         self.context = Context()
         self.socket = self.context.socket(SUB)
