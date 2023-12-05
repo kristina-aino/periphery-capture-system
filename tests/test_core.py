@@ -2,7 +2,7 @@ import unittest
 import asyncio
 from unittest.mock import patch, mock_open, MagicMock, AsyncMock
 
-from camera_capture_system.core import load_all_cameras_from_config, AsyncPublisher, AsyncCameraCapture, ParallelCameraCaptureAndPublish
+from camera_capture_system.core import load_all_cameras_from_config, AsyncPublisher, AsyncCameraCapture, SyncCameraCaptureAndPublish
 
 
 class TestLoadAllCamerasFromConfig(unittest.TestCase):
@@ -10,46 +10,18 @@ class TestLoadAllCamerasFromConfig(unittest.TestCase):
     @patch('camera_capture_system.core.load')
     @patch('camera_capture_system.core.Camera')
     def test_load_all_cameras_from_config(self, mock_camera, mock_load, mock_file):
-        mock_load.return_value = [{"id": "1", "name": "camera1"}, {"id": "2", "name": "camera2"}]
+        mock_load.return_value = {
+            "uuid1": {"id": "1", "name": "camera1"}, 
+            "uuid2": {"id": "2", "name": "camera2"}
+        }
 
-        cameras = load_all_cameras_from_config()
+        cameras = load_all_cameras_from_config("./test_not_a_real_file.json")
 
-        mock_file.assert_called_once_with("./cameras_configs.json", "r")
+        mock_file.assert_called_once_with("./test_not_a_real_file.json", "r")
         mock_load.assert_called_once()
         self.assertEqual(len(cameras), 2)
-        mock_camera.assert_any_call(id="1", name="camera1")
-        mock_camera.assert_any_call(id="2", name="camera2")
-
-
-class TestParallelCameraCaptureAndPublish(unittest.TestCase):
-    @patch('camera_capture_system.core.AsyncCameraCapture')
-    @patch('camera_capture_system.core.AsyncPublisher')
-    @patch('camera_capture_system.core.Camera')
-    def setUp(self, mock_camera, mock_async_publisher, mock_async_camera_capture):
-        self.cameras = [mock_camera for _ in range(3)]
-        self.camera_capture = ParallelCameraCaptureAndPublish(self.cameras)
-        self.camera_capture.camera_captures = [mock_async_camera_capture(cam) for cam in self.cameras]
-        self.camera_capture.zmq_publisher = mock_async_publisher
-
-        # Patch the capture method here
-        self.camera_capture.camera_captures[0].capture = AsyncMock()
-        self.camera_capture.camera_captures[1].capture = AsyncMock()
-        self.camera_capture.camera_captures[2].capture = AsyncMock()
-        
-        # patch the publish method here
-        self.camera_capture.zmq_publisher.publish = AsyncMock()
-
-    def test_start(self):
-        frame = MagicMock()
-        data = {"start_read_timestamp": 0, "end_read_timestamp": 1}
-        self.camera_capture.camera_captures[0].capture.return_value = frame, data
-        self.camera_capture.camera_captures[1].capture.return_value = frame, data
-        self.camera_capture.camera_captures[2].capture.return_value = frame, data
-
-        asyncio.run(self.camera_capture.start())
-
-        self.camera_capture.zmq_publisher.publish.assert_called()
-
+        mock_camera.assert_any_call(id="1", name="camera1", uuid="uuid1")
+        mock_camera.assert_any_call(id="2", name="camera2", uuid="uuid2")
 
 
 class TestAsyncPublisher(unittest.TestCase):

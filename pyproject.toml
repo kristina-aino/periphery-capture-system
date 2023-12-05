@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "camera-capture-system"
-version = "0.9.0"
+version = "1.0.0"
 description = "camera capture system to capture and maintain connection to multiple cameras, syncronise them and send the images over zeromq"
 authors = ["kristina-aino <kristina.ai@proton.me>"]
 readme = "README.md"

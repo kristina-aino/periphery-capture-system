@@ -33,8 +33,8 @@ CV2_BACKENDS = {
 class CameraInputReader:
     def __init__(self, camera: Camera):
         
-        logger.info(f"{camera.uuid} :: Initializing capture with backend {CV2_BACKENDS.get(system(), cv2.CAP_ANY)} ...")
-        logger.info(f"{camera.uuid} :: Camera information: {camera}")
+        logger.debug(f"{camera.uuid} :: Initializing capture with backend {CV2_BACKENDS.get(system(), cv2.CAP_ANY)} ...")
+        logger.debug(f"{camera.uuid} :: Camera information: {camera}")
         
         self.cam_uuid = camera.uuid
         
@@ -45,6 +45,7 @@ class CameraInputReader:
         self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, camera.width)
         self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, camera.height)
         
+        logger.info(f"{self.cam_uuid} :: Start Camera Initialization ...")
         self.check()
         
     def is_open(self):
@@ -60,16 +61,16 @@ class CameraInputReader:
         
         while attempts < max_attempts:
             
-            logger.info(f"{self.cam_uuid} :: Appempting to opening capture ...")
+            logger.debug(f"{self.cam_uuid} :: Appempting to opening capture ...")
             if not self.capture.isOpened():
                 logger.warn(f"{self.cam_uuid} :: Capture is not open. Retrying...")
                 attempts += 1
                 sleep(0.33)
                 
-            logger.info(f"{self.cam_uuid} :: Appempting to retrieve frame ...")
+            logger.debug(f"{self.cam_uuid} :: Appempting to retrieve frame ...")
             ret, _ = self.capture.read()
             if ret:
-                logger.info(f"{self.cam_uuid} :: Valid frame received.")
+                logger.info(f"{self.cam_uuid} :: Initialization successfull, valid frame received.")
                 return
             
             logger.warn(f"{self.cam_uuid} :: Failed to receive valid image from camera. Retrying...")
