@@ -52,11 +52,11 @@ poetry run python main.py
 ```
 ### Or use it as a module
 ```python
-from camera_capture_system.core import load_all_cameras_from_config, ParallelCameraCaptureAndPublish
+from camera_capture_system.core import load_all_cameras_from_config, MultiCameraCaptureAndPublish
 
 cameras = load_all_cameras_from_config(path_to_conf)
 
-pccp = SyncCameraCaptureAndPublish(cameras=cameras)
+pccp = MultiCameraCaptureAndPublish(cameras=cameras)
 pccp.start()
 
 ```

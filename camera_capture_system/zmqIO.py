@@ -1,18 +1,19 @@
-from zmq.asyncio import Context, Socket
+from zmq.asyncio import Context
 from zmq import SNDMORE, SUBSCRIBE, SUB, PUB, Context
-from numpy import ndarray, uint8, ascontiguousarray, frombuffer
+from numpy import ascontiguousarray, frombuffer
 from logging import getLogger
-from traceback import format_exc
 
-# ----------------------------------------
+from .datamodel import CameraFramePacket
+
+# ------------------- Logging ------------------- #
 
 logger = getLogger(__name__)
 
-# ----------------------------------------
+# ------------------- ZMQ IO ------------------- #
 
 class ZMQPublisher():
     """
-        Publishes data to a ZMQ socket.
+        Publishes CameraFramePacket to a ZMQ socket.
     """
     
     def __init__(
@@ -20,11 +21,11 @@ class ZMQPublisher():
         host_name: str = "127.0.0.1", 
         port=10000):
         
+        self.con_str = f"tcp://{host_name}:{port}"
+        
         self.context = Context()
         self.socket = self.context.socket(PUB)
-        self.socket.bind(f"tcp://{host_name}:{port}")
-        
-        self.con_str = f"tcp://{host_name}:{port}"
+        self.socket.bind(self.con_str)
         
         logger.info(f"ZMQPublisher initialized")
         logger.debug(f"ZMQPublisher bound to {self.con_str}")
@@ -35,25 +36,21 @@ class ZMQPublisher():
         logger.info(f"ZMQPublisher stopped")
         logger.debug(f"ZMQPublisher unbound from {self.con_str}")
 
-    def publish(self, image: ndarray[uint8], data: dict):
-        assert "image_data" not in data, "Key 'image_data' is reserved for image data"
+    def publish(self, frame_packet: CameraFramePacket):
 
-        data["image_data"] = {
-            "dtype": str(image.dtype),
-            "shape": image.shape
-        }
+        frame, data = frame_packet.dump()
         
-        if not image.flags["C_CONTIGUOUS"]:
-            image = ascontiguousarray(image)
+        if not frame.flags["C_CONTIGUOUS"]:
+            frame = ascontiguousarray(frame)
         
         self.socket.send_json(data, flags=SNDMORE)
-        self.socket.send(image, copy=False, track=False)
+        self.socket.send(frame, copy=False, track=False)
         
         logger.debug(f"ZMQPublisher {self.con_str} published data: {data}")
 
 class ZMQSubscriber():
     """
-        Subscribes to a ZMQ socket.
+        Subscribes to a ZMQ socket to collect CameraFramePacket.
     """
     
     def __init__(
@@ -61,26 +58,33 @@ class ZMQSubscriber():
         host_name: str = "127.0.0.1",
         port=10000):
         
+        self.con_str = f"tcp://{host_name}:{port}"
+        
         # ZMQ setup
         self.context = Context()
         self.socket = self.context.socket(SUB)
         self.socket.setsockopt(SUBSCRIBE, b"")
-        self.socket.connect(f"tcp://{host_name}:{port}")
+        self.socket.connect(self.con_str)
         
-        logger.debug(f"ZMQSubscriber connected to tcp://{host_name}:{port}")
+        logger.debug(f"ZMQSubscriber connected to {self.con_str}")
+        
+    def close(self):
+        self.socket.close()
+        self.context.term()
+        logger.info(f"ZMQSubscriber stopped")
+        logger.debug(f"ZMQSubscriber unbound from {self.con_str}")
 
-    def recieve(self) -> tuple[ndarray[uint8], dict]:
+    def recieve(self) -> CameraFramePacket:
         
         if not self.socket.poll(1000):
-            logger.warning("No data recieved")
+            logger.warning(f"{self.con_str} :: No data recieved")
             return None
         
         data = self.socket.recv_json()
         buf_image = self.socket.recv(copy=False, track=False)
-        
-        logger.debug(f"ZMQSubscriber recieved data: {data}")
-        
         image = frombuffer(buf_image, dtype=data["image_data"]["dtype"])
         image = image.reshape(data["image_data"]['shape'])
         
-        return image, data
+        logger.debug(f"ZMQSubscriber {self.con_str} recieved data: {data}")
+        
+        return CameraFramePacket.create(frame=image, data=data)

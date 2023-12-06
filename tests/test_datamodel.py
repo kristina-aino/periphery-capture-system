@@ -1,7 +1,6 @@
 import pytest
 from pydantic import ValidationError
-
-from camera_capture_system.camera import Camera
+from camera_capture_system.datamodel import Camera, ImageParameters, VideoParameters
 
 
 def test_camera():
@@ -49,3 +48,20 @@ def test_camera_type_validators(uuid, id, width, height, fps, name, position):
             name=name,
             position=position,
         )
+
+def test_image_parameters():
+    # Test with valid parameters
+    params = ImageParameters(save_path="/valid/path", jpg_quality=50, png_compression=50, output_format="jpg")
+    assert params.save_path == "/valid/path"
+    assert params.jpg_quality == 50
+    assert params.png_compression == 50
+    assert params.output_format == "jpg"
+    
+def test_video_parameters():
+    # Test with valid parameters
+    params = VideoParameters(save_path="/valid/path", fps=30, seconds=10, codec="mp4v")
+    assert params.save_path == "/valid/path"
+    assert params.fps == 30
+    assert params.seconds == 10
+    assert params.codec == "mp4v"
+    

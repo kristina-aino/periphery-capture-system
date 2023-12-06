@@ -4,6 +4,7 @@ import numpy as np
 
 from camera_capture_system.zmqIO import ZMQPublisher, ZMQSubscriber
 
+
 class TestZMQPublisher(unittest.TestCase):
 
     @patch('camera_capture_system.zmqIO.Context', autospec=True)
@@ -12,13 +13,14 @@ class TestZMQPublisher(unittest.TestCase):
         mock_context.return_value.socket.return_value = mock_socket
 
         publisher = ZMQPublisher()
-        image = np.array([[1, 2], [3, 4]], dtype=np.uint8)
-        data = {"test": "data"}
+        camera_frame_packet = MagicMock()
+        camera_frame_packet.dump.return_value = (np.array([[1, 2], [3, 4]], dtype=np.uint8), MagicMock())
 
-        publisher.publish(image, data)
+        publisher.publish(camera_frame_packet)
 
         mock_socket.send_json.assert_called_once()
         mock_socket.send.assert_called_once()
+
 
 class TestZMQSubscriber(unittest.TestCase):
     
@@ -28,11 +30,21 @@ class TestZMQSubscriber(unittest.TestCase):
         mock_context.return_value.socket.return_value = mock_socket
 
         mock_socket.recv_json.return_value = {
-            "test": "data",
             "image_data": {
                 "dtype": "uint8",
                 "shape": [2, 2]
-            }
+            },
+            "camera": {
+                "uuid": "test",
+                "id": 0,
+                "width": 1920,
+                "height": 1080,
+                "fps": 30,
+                "name": "test",
+                "position": "test"
+            },
+            "start_read_timestamp": 0.0,
+            "end_read_timestamp": 0.0
         }
         mock_socket.recv.return_value = np.array([[1, 2], [3, 4]], dtype=np.uint8)
 

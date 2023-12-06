@@ -1,3 +1,4 @@
-from . import core
+from . import cameraIO
 from . import zmqIO
-from . import camera
+from . import fileIO
+from . import core

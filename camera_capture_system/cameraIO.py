@@ -2,25 +2,12 @@ from time import sleep
 from logging import getLogger
 import cv2
 from platform import system
-from pydantic import BaseModel, Field, StrictStr, Strict
-from typing_extensions import Annotated
+
+from .datamodel import Camera
 
 # ------------------- Logging ------------------- #
 
 logger = getLogger(__name__)
-
-# ------------------- Datamodel ------------------- #
-
-StrictNonEmptyStr = Annotated[StrictStr, Field(min_length=1), Strict()]
-
-class Camera(BaseModel):
-    uuid: StrictNonEmptyStr # unique identifier for the camera
-    id: Annotated[int, Field(ge=0), Strict()] # index of the camera in the system (opencv index)
-    width: Annotated[int, Field(ge=640, le=3840), Strict()]
-    height: Annotated[int, Field(ge=480, le=2160), Strict()]
-    fps: Annotated[int, Field(ge=15, le=120), Strict()]
-    name: StrictNonEmptyStr
-    position: StrictNonEmptyStr
 
 # ------------------- OpenCV Camera Input Reader ------------------- #
 
