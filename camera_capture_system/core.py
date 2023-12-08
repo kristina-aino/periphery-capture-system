@@ -27,6 +27,33 @@ def load_all_cameras_from_config(config_path: str) -> List[Camera]:
     return [Camera(**cameras[cam_uuid], uuid=cam_uuid) for cam_uuid in cameras]
 
 
+# meant to be run in a separate process
+def buffer_frames(host_name: str, port: int, frame_packet_Q: dict):
+    
+    zmq_sub = ZMQSubscriber(host_name, port)
+
+    try:    
+        while True:
+            # record and time frame, continure if recording took too long
+            frame_packet = zmq_sub.recieve()
+            if not frame_packet:
+                continue
+            
+            # drop frame if buffer is full
+            if frame_packet_Q[frame_packet.camera.uuid].full():
+                logger.warning(f"{frame_packet.camera.uuid} :: buffer full, dropping frame ...")
+                frame_packet_Q[frame_packet.camera.uuid].get()
+                
+            # put frame into camera specific queue, and increment frame counter
+            frame_packet_Q[frame_packet.camera.uuid].put(frame_packet)
+    except KeyboardInterrupt:
+        logger.info(f"KeyboardInterrupt ...")
+    except:
+        logger.error("Unexpected error:", format_exc())
+        raise
+    finally:
+        zmq_sub.close()
+
 class MultiCameraZMQSubscriberBufferProcess:
     """
         Subsribes to a single ZMQ socket and buffers the data per camera.
@@ -36,27 +63,25 @@ class MultiCameraZMQSubscriberBufferProcess:
         self, 
         cameras: List[Camera],
         host_name: str = "127.0.0.1",
-        port: int = 10000, 
-        Q_maxsize: int = 100):
-        
+        port: int = 10000,
+        Q_maxsize: int = 100,
+        queue_read_timeout: float = 2):
+                
         self.cameras = cameras
-        self.zmq_sub = ZMQSubscriber(host_name, port)
-        self.Q_maxsize = Q_maxsize
+        self.frame_packet_Q = dict((cam.uuid, Queue(maxsize=Q_maxsize)) for cam in self.cameras)
         
-        self.frame_packet_Q = dict((cam.uuid, Queue(maxsize=self.Q_maxsize)) for cam in self.cameras)
-        self.Q_sizes = dict((cam.uuid, 0) for cam in self.cameras)
-
-        self.P = Process(target=self.buffer_frames)
-        
-    def stop(self):
-        for cam_uuid in self.frame_packet_Q:
-            self.frame_packet_Q[cam_uuid].close()
-        if self.P.is_alive():
-            self.P.join()
-            self.P.close()
-        self.zmq_sub.close()
-
+        self.P = Process(target=buffer_frames, args=(
+            host_name,
+            port,
+            self.frame_packet_Q
+        ), daemon=True)
+                
+        self.queue_read_timeout = queue_read_timeout
+                
     def start(self):
+        
+        logger.info("starting MultiCameraZMQSubscriberBufferProcess ...")
+        
         try:
             self.P.start()
         except KeyboardInterrupt:
@@ -64,40 +89,70 @@ class MultiCameraZMQSubscriberBufferProcess:
         except:
             logger.error("Unexpected error:", format_exc())
             raise
-        finally:
-            self.stop()
-    
-    # def clear(self):
-    #     for cam_uuid in self.frame_packet_Q:
-    #         self.frame_packet_Q[cam_uuid].close()
-    #         self.frame_packet_Q[cam_uuid] = Queue(maxsize=self.Q_maxsize)
-    #         self.Q_sizes[cam_uuid] = 0
-                
-    def buffer_frames(self):
-        while True:
-            
-            # record and time frame, continure if recording took too long
-            frame_packet = self.zmq_sub.read()
-            if not frame_packet:
-                continue
-            cam_uuid = frame_packet.camera.uuid
-            
-            # put frame into camera specific queue, and increment frame counter
-            self.frame_packet_Q[cam_uuid].put(frame_packet)
-            self.Q_sizes[cam_uuid] += 1
         
-    def get_all_frame_packets(self) -> List[CameraFramePacket]:
-        if not all([self.Q_sizes[cam_uuid] > 0 for cam_uuid in self.frame_packet_Q]):
+    def get_frame_packets(self) -> List[CameraFramePacket]:
+        # if any([self.frame_packet_Q[cam_uuid].empty() for cam_uuid in self.frame_packet_Q]):
+        #     logger.warning("not all buffers have frames when reading")
+        #     return None
+        try:
+            frame_packets = [self.frame_packet_Q[cam_uuid].get(timeout=self.queue_read_timeout) for cam_uuid in self.frame_packet_Q]
+            return frame_packets
+        except TimeoutError:
             logger.warning("not all buffers have frames when reading")
             return None
-        return [self.get_frame_packet(cam_uuid) for cam_uuid in self.frame_packet_Q]
+        
+    def stop(self):
+        for cam_uuid in self.frame_packet_Q:
+            self.frame_packet_Q[cam_uuid].close()
+        if self.P.is_alive():
+            self.P.terminate()
+            self.P.join()
+            self.P.close()
+        logger.info("buffered subscriber process stopped")
+
+class MultiCameraZMQSubscriber:
+    """
+        Subsribes to a single ZMQ socket and returns the data.
+    """
     
-    def get_frame_packet(self, cam_uuid: str) -> CameraFramePacket:
-        if cam_uuid not in self.frame_packet_Q or self.Q_sizes[cam_uuid] == 0:
-            logger.warning(f"{cam_uuid} :: no frames in buffer when reading")
-            return None
-        self.Q_sizes[cam_uuid] -= 1
-        return self.frame_packet_Q[cam_uuid]
+    def __init__(
+        self, 
+        cameras: List[Camera],
+        host_name: str = "127.0.0.1",
+        port: int = 10000):
+        
+        self.cameras = cameras
+        self.zmq_sub = ZMQSubscriber(host_name, port)
+
+        self.current_frame_packets = dict(
+            (cam.uuid, None) for cam in self.cameras
+        )
+        
+    def start(self):
+        
+        try:
+            while True:
+                
+                while any (frame_packet is None for frame_packet in self.current_frame_packets.values()):
+                    frame_packet = self.zmq_sub.recieve()
+                    if not frame_packet:
+                        continue
+                    self.current_frame_packets[frame_packet.camera.uuid] = frame_packet.camera_frame
+                    
+                yield self.current_frame_packets.values()
+                
+                for cam_uuid in self.current_frame_packets:
+                    self.current_frame_packets[cam_uuid] = None
+            
+        except KeyboardInterrupt:
+            logger.info("KeyboardInterrupt ...")
+        except:
+            logger.error("Unexpected error:", format_exc())
+            raise
+        
+    def stop(self):
+        self.zmq_sub.close()
+        logger.info("multi cam subscriber stopped")
 
 class MultiCameraCaptureAndPublish:
     """
@@ -126,6 +181,8 @@ class MultiCameraCaptureAndPublish:
         self.async_zmq_publisher.stop()
 
     def start(self):
+        
+        logger.info("starting MultiCameraCaptureAndPublish ...")
         
         try:
             while True:
@@ -168,7 +225,6 @@ class MultiCameraCaptureAndPublish:
         # publish data
         publish_futures = [self.async_zmq_publisher.publish(p) for p in packets]
         await gather(*publish_futures)
-        
 
 class AsyncCameraCapture:
     

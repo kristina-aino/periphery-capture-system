@@ -1,8 +1,8 @@
 import os
 import cv2
-import traceback
 import time
 
+from traceback import format_exc
 from datetime import datetime
 from logging import getLogger
 from concurrent.futures import ThreadPoolExecutor
@@ -17,20 +17,23 @@ logger = getLogger(__name__)
 
 # ------------------- Helpers ------------------- #
 
-def save_video_from_queue(frame_queue: Queue, video_uri: str, video_params: VideoParameters):
+def save_video_from_queue(frame_packet_queue: Queue, video_uri: str, video_params: VideoParameters):
 
     try:
+        first_frame = frame_packet_queue.get().camera_frame
+        
         video_writer = cv2.VideoWriter(
             filename=video_uri, 
             fourcc=cv2.VideoWriter_fourcc(*video_params.codec),
             fps=video_params.fps,
-            frameSize=(video_params.width, video_params.height))
+            frameSize=(first_frame.shape[1], first_frame.shape[0]))
 
         logger.info(f"start saving video {video_uri} ...")
         
         # write frames to video
+        video_writer.write(first_frame)
         for _ in range(video_params.fps * video_params.seconds):
-            frame_packet = frame_queue.get()
+            frame_packet = frame_packet_queue.get()
             video_writer.write(frame_packet.camera_frame)
         
         # release video writer
@@ -39,7 +42,7 @@ def save_video_from_queue(frame_queue: Queue, video_uri: str, video_params: Vide
         logger.info(f"done saving video {video_uri} ...")
 
     except:
-        logger.error(traceback.format_exc())
+        logger.error(format_exc())
         raise
     finally:
         video_writer.release()
@@ -55,10 +58,10 @@ def save_image(frame_packet: CameraFramePacket, image_uri: str, image_params: Im
 
 # ------------------- Functionality ------------------- #
 
-def write_videos_from_video_stream(zmq_sub_buf: MultiCameraZMQSubscriberBufferProcess, video_params: VideoParameters):
+def write_videos_from_zmq_stream(zmq_sub_buf: MultiCameraZMQSubscriberBufferProcess, video_params: VideoParameters):
         
     # ensure directory exists
-    assert os.path.exists(save_path), f"save path {video_params.save_path} does not exist"
+    assert os.path.exists(video_params.save_path), f"save path {video_params.save_path} does not exist"
     
     frames_per_video = video_params.fps * video_params.seconds
     save_video_processes = {}
@@ -66,11 +69,9 @@ def write_videos_from_video_stream(zmq_sub_buf: MultiCameraZMQSubscriberBufferPr
     try:
         
         zmq_sub_buf.start()
-
+        logger.info(f"buffered zmq subscriber started ...")
+        
         while True:
-            
-            # sleep a second for the buffer to fill
-            time.sleep(1)
 
             logger.info(f"reading frames ...")
             collected_frames = 0
@@ -79,7 +80,7 @@ def write_videos_from_video_stream(zmq_sub_buf: MultiCameraZMQSubscriberBufferPr
             while collected_frames < frames_per_video:
 
                 # try read buffered frames
-                all_frame_packets = zmq_sub_buf.get_all_frame_packets()
+                all_frame_packets = zmq_sub_buf.get_frame_packets()
                 if not all_frame_packets or not all(all_frame_packets):
                     continue
 
@@ -111,14 +112,15 @@ def write_videos_from_video_stream(zmq_sub_buf: MultiCameraZMQSubscriberBufferPr
     except KeyboardInterrupt:
         logger.info("KeyboardInterrupt ...")
     except:
-        traceback.print_exc()
-        logger.error(traceback.format_exc())
+        logger.error(format_exc())
         raise
     finally:
         for cam_uuid in save_video_processes:
             if save_video_processes[cam_uuid].is_alive():
                 save_video_processes[cam_uuid].join()
                 save_video_processes[cam_uuid].close()
+        zmq_sub_buf.stop()
+        logger.info("all save video processes stopped")
 
 
 def save_images_from_zmq_stream(zmq_sub_buf: MultiCameraZMQSubscriberBufferProcess, image_params: ImageParameters):
@@ -153,7 +155,7 @@ def save_images_from_zmq_stream(zmq_sub_buf: MultiCameraZMQSubscriberBufferProce
     except KeyboardInterrupt:
         logger.info("KeyboardInterrupt ...")
     except:
-        logger.error("Unexpected error:", traceback.format_exc())
+        logger.error("Unexpected error:", format_exc())
         raise
     finally:
         executor.shutdown(wait=True)

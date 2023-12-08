@@ -25,13 +25,23 @@ class CameraInputReader:
         
         self.cam_uuid = camera.uuid
         
+        # set backend and capture
         backend = CV2_BACKENDS.get(system(), cv2.CAP_ANY)
-        self.capture = cv2.VideoCapture(camera.id, backend)
+        self.capture = cv2.VideoCapture(camera.id, backend,)
         
-        self.capture.set(cv2.CAP_PROP_FPS, camera.fps)
-        self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, camera.width)
-        self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, camera.height)
+        # set capture parameters and test
+        set_fps = self.capture.set(cv2.CAP_PROP_FPS, camera.fps)
+        set_width = self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, camera.width)
+        set_height = self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, camera.height)
         
+        if not set_fps:
+            logger.warn(f"{self.cam_uuid} :: Failed to set fps to {camera.fps}, using {self.capture.get(cv2.CAP_PROP_FPS)} instead.")
+        if not set_width:
+            logger.warn(f"{self.cam_uuid} :: Failed to set width to {camera.width}, using {self.capture.get(cv2.CAP_PROP_FRAME_WIDTH)} instead.")
+        if not set_height:
+            logger.warn(f"{self.cam_uuid} :: Failed to set height to {camera.height}, using {self.capture.get(cv2.CAP_PROP_FRAME_HEIGHT)} instead.")
+        
+        # check camera functionality
         logger.info(f"{self.cam_uuid} :: Start Camera Initialization ...")
         self.check()
         
@@ -42,7 +52,7 @@ class CameraInputReader:
     def close(self):
         logger.info(f"{self.cam_uuid} :: Closing capture ...")
         self.capture.release()
-            
+        
     def check(self, max_attempts: int = 10) -> None:
         attempts = 0
         
@@ -65,4 +75,4 @@ class CameraInputReader:
             sleep(0.33)
             
         self.close()
-        raise RuntimeError(f"{self.cam_uuid} :: Failed to receive image from camera after {max_attempts} attempts.")    
+        raise RuntimeError(f"{self.cam_uuid} :: Failed to receive image from camera after {max_attempts} attempts.")

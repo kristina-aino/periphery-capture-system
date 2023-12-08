@@ -44,8 +44,8 @@ class CameraFramePacket:
                 "dtype": str(self.camera_frame.dtype),
                 "shape": self.camera_frame.shape
             },
-            "start_read_timestamp": self.timestamp.timestamp(),
-            "end_read_timestamp": self.timestamp.timestamp()
+            "start_read_timestamp": self.start_read_dt.timestamp(),
+            "end_read_timestamp": self.end_read_dt.timestamp()
         }
     
     # if data is from imagezmq
