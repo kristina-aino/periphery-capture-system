@@ -1,3 +1,4 @@
+from datetime import datetime
 from zmq.asyncio import Context
 from zmq import SNDMORE, SUBSCRIBE, SUB, PUB, Context
 from numpy import ascontiguousarray, frombuffer, ndarray, uint8
@@ -27,6 +28,11 @@ class ZMQPublisher():
         logger.info(f"ZMQPublisher initialized")
         logger.debug(f"ZMQPublisher bound to {self.con_str}")
         
+        self.last_start_read_dt = datetime.now()
+        
+    def is_ok(self):
+        return not self.socket.closed and not self.context.closed
+        
     def close(self):
         self.socket.close()
         self.context.term()
@@ -39,15 +45,23 @@ class ZMQPublisher():
         return frame, data
         
     def publish(self, frame_packet: CameraFramePacket):
-        assert not self.socket.closed and not self.context.closed, f"ZMQPublisher {self.con_str} is not ok"
+        assert self.is_ok(), f"ZMQPublisher {self.con_str} is not ok"
+        
         
         frame, data = self.prepare_packet(frame_packet)
         self.socket.send_json(data, flags=SNDMORE)
         self.socket.send(frame, copy=False, track=False)
+        
+        # debug the published data
         logger.debug(f"ZMQPublisher {self.con_str} published data: {data}")
         
+        # debug the record time
+        dt = frame_packet.start_read_dt.timestamp() - self.last_start_read_dt.timestamp()
+        logger.debug(f"ZMQPublisher {self.con_str} published frame: {frame_packet.camera.uuid} :: fps: {1/dt}")
+        self.last_start_read_dt = frame_packet.start_read_dt
+        
     async def async_publish(self, frame_packet: CameraFramePacket):
-        self.publish(frame_packet)    
+        self.publish(frame_packet)
 
 class ZMQSubscriber():
     """
@@ -66,13 +80,18 @@ class ZMQSubscriber():
         
         logger.debug(f"ZMQSubscriber connected to {self.con_str}")
         
+    def is_ok(self):
+        return not self.socket.closed and not self.context.closed
+    
     def close(self):
         self.socket.close()
         self.context.term()
         logger.info(f"ZMQSubscriber stopped")
         logger.debug(f"ZMQSubscriber unbound from {self.con_str}")
-
+    
     def recieve(self) -> CameraFramePacket:
+        
+        assert self.is_ok(), f"ZMQSubscriber {self.con_str} is not ok"
         
         if not self.socket.poll(1000):
             logger.warning(f"{self.con_str} :: No data recieved")

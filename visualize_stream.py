@@ -30,11 +30,12 @@ if __name__ == "__main__":
     
     try:
         
-        mcs.start()
-        
-        for frame_packets in mcs.start():
+        for frame_packets in mcs.receive():
             
             for frame_packet in frame_packets:
+                
+                if frame_packet is None:
+                    continue
                 
                 frame = frame_packet.camera_frame
                 
@@ -48,5 +49,4 @@ if __name__ == "__main__":
         logger.error("Unexpected error:", format_exc())
         raise
     finally:
-        mcs.stop()
         cv2.destroyAllWindows()

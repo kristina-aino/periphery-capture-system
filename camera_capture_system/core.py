@@ -109,6 +109,19 @@ def load_all_cameras_from_config(config_path: str) -> List[Camera]:
 #             self.P.close()
 #         logger.info("buffered subscriber process stopped")
 
+
+class ZMQPublisherProcessWithBuffer:
+    """
+        Publishes data from a single camera to a ZMQ socket, as a process.
+        The process should be recoverable
+        
+        #TODO
+    """
+    
+    def __init__(self):
+        return NotImplemented
+
+
 class MultiCameraZMQSubscriber:
     """
         Subsribes to a list of ZMQ sockets and returns the data.
@@ -123,15 +136,23 @@ class MultiCameraZMQSubscriber:
         self.cameras = cameras
         self.zmq_subscribers = [ZMQSubscriber(host_name, port) for port in ports]
         
+    def is_ok(self):
+        return all([zmq_sub.is_ok() for zmq_sub in self.zmq_subscribers])
+        
     def stop(self):
-        self.zmq_sub.close()
+        for zmq_sub in self.zmq_subscribers:
+            zmq_sub.close()
         logger.info("multi cam subscriber stopped")
         
     def receive(self):
         
         try:
+            assert self.is_ok(), "not all subscribers are ok"
+            
             while True:
-                yield [zmq_sub.recieve() for zmq_sub in self.zmq_subscribers]
+                packages = [zmq_sub.recieve() for zmq_sub in self.zmq_subscribers]
+                
+                yield packages
             
         except KeyboardInterrupt:
             logger.info("KeyboardInterrupt ...")
@@ -140,7 +161,6 @@ class MultiCameraZMQSubscriber:
             raise
         finally:
             self.stop()
-
 
 class MultiCameraCaptureAndPublish:
     """
@@ -163,18 +183,16 @@ class MultiCameraCaptureAndPublish:
         self.async_zmq_publishers = [ZMQPublisher(host_name, port) for port in ports]
         
         self.PUBLISHING_MODE = PUBLISHING_MODE
-
+        
     def stop(self):
         for cam_cap in self.async_camera_captures:
             cam_cap.close()
         for zmq_pub in self.async_zmq_publishers:
             zmq_pub.close()
         logger.info("multi cam capture and publish stopped")
-
+        
     def start(self):
-        
         logger.info("starting multi cam capture and publish ...")
-        
         try:
             while True:
                 run_async(self.capture_and_publish())
@@ -187,11 +205,11 @@ class MultiCameraCaptureAndPublish:
             self.stop()
         
     async def capture_and_publish(self):
-    
+        
         # parallel capture
         capture_futures = [cam_cap.async_read() for cam_cap in self.async_camera_captures]
         results = await gather(*capture_futures)
-
+        
         # filter out None results
         packets = [r for r in results if r is not None]
         
@@ -200,6 +218,19 @@ class MultiCameraCaptureAndPublish:
             if len(packets) != len(self.async_camera_captures):
                 logger.warning(f"fonud {len(packets)}/{len(self.async_camera_captures)} cameras, publishing failed ...")
                 return
+        
+        # # calculate the time difference between the frames
+        # start_read_time_ts = [p.start_read_dt.timestamp() for p in packets]
+        # end_read_time_ts = [p.end_read_dt.timestamp() for p in packets]
+        
+        # current_start_read_ts = min(start_read_time_ts)
+        # current_end_read_ts = max(end_read_time_ts)
+        
+        # logger.debug(f"frame rate : {1/(current_start_read_ts - last_start_read_ts)}")
+        # logger.debug(f"frame rate : {1/(current_end_read_ts - last_end_read_ts)}")
+        
+        # last_start_read_ts = current_start_read_ts
+        # last_end_read_ts = current_end_read_ts
         
         # # check the read time differences for each camera and for all cameras
         # end_read_ts = [data["end_read_timestamp"] for _, data in cam_data]

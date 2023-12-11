@@ -1,4 +1,5 @@
-import logging
+from logging import getLogger, basicConfig
+from traceback import format_exc
 import argparse
 
 # ---------------------------------------------------------------------
@@ -14,20 +15,26 @@ ARGS = AP.parse_args()
 
 # ---------------------------------------------------------------------
 
-logging.basicConfig(level=ARGS.logging_level.upper())
+basicConfig(level=ARGS.logging_level.upper())
+logger = getLogger(__name__)
 
 # ---------------------------------------------------------------------
 
 # Setp 1: read camera configurations for all cameras
 from camera_capture_system.core import load_all_cameras_from_config, MultiCameraCaptureAndPublish
 
-
-cameras = load_all_cameras_from_config(ARGS.cameras_config)
-pccp = MultiCameraCaptureAndPublish(
-    cameras=cameras,
-    host_name=ARGS.host_name,
-    ports=ARGS.ports,
-    PUBLISHING_MODE=ARGS.publishing_mode,
-    max_consec_reader_failures=ARGS.max_consec_reader_failures)
-
-pccp.start()
+try:
+    cameras = load_all_cameras_from_config(ARGS.cameras_config)
+    pccp = MultiCameraCaptureAndPublish(
+        cameras=cameras,
+        host_name=ARGS.host_name,
+        ports=ARGS.ports,
+        PUBLISHING_MODE=ARGS.publishing_mode,
+        max_consec_reader_failures=ARGS.max_consec_reader_failures)
+    
+    pccp.start()
+except KeyboardInterrupt:
+    logger.info(f"KeyboardInterrupt ...")
+except:
+    logger.error("Unexpected error:", format_exc())
+    raise

@@ -37,15 +37,11 @@ class CameraInputReader:
         set_width = self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, self.camera.width)
         set_height = self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, self.camera.height)
         
-        if not set_fps:
-            logger.warn(f"{self.camera.uuid} :: Failed to set fps to {self.camera.fps}, using {self.capture.get(cv2.CAP_PROP_FPS)} instead.")
-        if not set_width:
-            logger.warn(f"{self.camera.uuid} :: Failed to set width to {self.camera.width}, using {self.capture.get(cv2.CAP_PROP_FRAME_WIDTH)} instead.")
-        if not set_height:
-            logger.warn(f"{self.camera.uuid} :: Failed to set height to {self.camera.height}, using {self.capture.get(cv2.CAP_PROP_FRAME_HEIGHT)} instead.")
+        logger.info(f"{self.camera.uuid} :: set fps to {self.capture.get(cv2.CAP_PROP_FPS)}")
+        logger.warn(f"{self.camera.uuid} :: set width to {self.capture.get(cv2.CAP_PROP_FRAME_WIDTH)}")
+        logger.warn(f"{self.camera.uuid} :: set height to {self.capture.get(cv2.CAP_PROP_FRAME_HEIGHT)}")
         
         # initialize camera befor use
-        logger.info(f"{self.camera.uuid} :: Start Camera Initialization ...")
         self.initialize()
         
     def is_open(self):
@@ -53,7 +49,8 @@ class CameraInputReader:
     
     def initialize(self):
         
-        logger.info(f"{self.camera.uuid} :: Checking camera functionality ...")
+        logger.info(f"{self.camera.uuid} :: Start Camera Initialization ...")
+        
         try:
             # try open camera
             while not self.is_open() and self.fail_counter < self.max_consec_failures:
@@ -67,12 +64,13 @@ class CameraInputReader:
             self.fail_counter = 0
             
             # try read frame
-            ret = self.read()
+            for _ in range(self.max_consec_failures):
+                ret = self.read()
         except:
             raise
-        logger.info(f"{self.camera.uuid} :: Camera check successful!")
         
-    
+        logger.info(f"{self.camera.uuid} :: Camera initialization successful!")
+        
     def close(self):
         self.capture.release()
         logger.info(f"{self.camera.uuid} :: Capture closed!")
@@ -80,13 +78,13 @@ class CameraInputReader:
     def read_(self):
         
         assert self.is_open(), f" {self.camera.uuid} :: AsyncCameraCapture is not open but attempted to read"
-
+        
         try:
-            # try read frame and define metadata
+            # try read frame and define camera read time
             start_read_dt = datetime.now()
             ok, frame = self.capture.read()
             end_read_dt = datetime.now()
-        
+
             # count incorrect reads
             if not ok:
                 raise RuntimeError(f"{self.camera.uuid} :: reader returned not ok")
@@ -107,15 +105,11 @@ class CameraInputReader:
             # close and throw if too many failures
             if self.fail_counter >= self.max_consec_failures:
                 self.close()
-                raise Exception(f"{self.camera.uuid} :: no frame found after {self.fail_counter} attempts")
+                raise Exception(f"{self.camera.uuid} :: no valid frame found after {self.fail_counter} consecutive attempts")
             
             # otherwise wait and return None
             sleep(0.5)
             return None
-        except:
-            logger.error(f"{self.camera.uuid} :: Unexpected error: {format_exc()}")
-            self.close()
-            raise
         
     def read(self):
         ret = self.read_()
