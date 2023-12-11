@@ -1,12 +1,4 @@
 {
-  "cam0": {
-    "id": 2,
-    "width": 1920,
-    "height": 1080,
-    "fps": 30,
-    "name": "HD-4MP-WEBCAM",
-    "position": "center"
-  },
   "cam1": {
     "id": 0,
     "width": 1920,

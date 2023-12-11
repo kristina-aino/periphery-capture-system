@@ -1,6 +1,6 @@
 from zmq.asyncio import Context
 from zmq import SNDMORE, SUBSCRIBE, SUB, PUB, Context
-from numpy import ascontiguousarray, frombuffer
+from numpy import ascontiguousarray, frombuffer, ndarray, uint8
 from logging import getLogger
 
 from .datamodel import CameraFramePacket
@@ -13,13 +13,10 @@ logger = getLogger(__name__)
 
 class ZMQPublisher():
     """
-        Publishes CameraFramePacket to a ZMQ socket.
+        Publishes CameraFramePacket to a single ZMQ socket.
     """
     
-    def __init__(
-        self, 
-        host_name: str = "127.0.0.1", 
-        port=10000):
+    def __init__(self, host_name: str, port: int):
         
         self.con_str = f"tcp://{host_name}:{port}"
         
@@ -33,30 +30,31 @@ class ZMQPublisher():
     def close(self):
         self.socket.close()
         self.context.term()
-        logger.info(f"ZMQPublisher stopped")
-        logger.debug(f"ZMQPublisher unbound from {self.con_str}")
-
-    def publish(self, frame_packet: CameraFramePacket):
-
-        frame, data = frame_packet.dump()
+        logger.info(f"ZMQPublisher {self.con_str} stopped and unbound")
         
+    def prepare_packet(self, frame_packet: CameraFramePacket) -> (ndarray[uint8], dict):        
+        frame, data = frame_packet.dump()
         if not frame.flags["C_CONTIGUOUS"]:
             frame = ascontiguousarray(frame)
+        return frame, data
         
+    def publish(self, frame_packet: CameraFramePacket):
+        assert not self.socket.closed and not self.context.closed, f"ZMQPublisher {self.con_str} is not ok"
+        
+        frame, data = self.prepare_packet(frame_packet)
         self.socket.send_json(data, flags=SNDMORE)
         self.socket.send(frame, copy=False, track=False)
-        
         logger.debug(f"ZMQPublisher {self.con_str} published data: {data}")
+        
+    async def async_publish(self, frame_packet: CameraFramePacket):
+        self.publish(frame_packet)    
 
 class ZMQSubscriber():
     """
-        Subscribes to a ZMQ socket to collect CameraFramePacket.
+        Subscribes to a single ZMQ socket to collect CameraFramePacket.
     """
     
-    def __init__(
-        self, 
-        host_name: str = "127.0.0.1",
-        port=10000):
+    def __init__(self, host_name: str, port: int):
         
         self.con_str = f"tcp://{host_name}:{port}"
         
@@ -88,3 +86,6 @@ class ZMQSubscriber():
         logger.debug(f"ZMQSubscriber {self.con_str} recieved data: {data}")
         
         return CameraFramePacket.create(frame=image, data=data)
+    
+    async def async_recieve(self) -> CameraFramePacket:
+        return self.recieve()

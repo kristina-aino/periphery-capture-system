@@ -55,8 +55,7 @@ class CameraFramePacket:
             camera=Camera(**data["camera"]),
             camera_frame=frame,
             start_read_dt=datetime.fromtimestamp(data["start_read_timestamp"]),
-            end_read_dt=datetime.fromtimestamp(data["end_read_timestamp"])
-        )
+            end_read_dt=datetime.fromtimestamp(data["end_read_timestamp"]))
         
     def __post_init__(self):
         assert isinstance(self.camera, Camera), "camera must be a Camera object"

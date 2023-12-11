@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 from multiprocessing import Queue, Process
 
 from .datamodel import CameraFramePacket, ImageParameters, VideoParameters
-from .core import MultiCameraZMQSubscriberBufferProcess
+from .core import MultiCameraZMQSubscriber
 
 # ------------------- Logging ------------------- #
 
@@ -58,7 +58,7 @@ def save_image(frame_packet: CameraFramePacket, image_uri: str, image_params: Im
 
 # ------------------- Functionality ------------------- #
 
-def write_videos_from_zmq_stream(zmq_sub_buf: MultiCameraZMQSubscriberBufferProcess, video_params: VideoParameters):
+def write_videos_from_zmq_stream(multi_zmq_sub: MultiCameraZMQSubscriber, video_params: VideoParameters):
         
     # ensure directory exists
     assert os.path.exists(video_params.save_path), f"save path {video_params.save_path} does not exist"
@@ -67,9 +67,6 @@ def write_videos_from_zmq_stream(zmq_sub_buf: MultiCameraZMQSubscriberBufferProc
     save_video_processes = {}
 
     try:
-        
-        zmq_sub_buf.start()
-        logger.info(f"buffered zmq subscriber started ...")
         
         while True:
 
@@ -80,15 +77,14 @@ def write_videos_from_zmq_stream(zmq_sub_buf: MultiCameraZMQSubscriberBufferProc
             while collected_frames < frames_per_video:
 
                 # try read buffered frames
-                all_frame_packets = zmq_sub_buf.get_frame_packets()
+                all_frame_packets = multi_zmq_sub.receive()
                 if not all_frame_packets or not all(all_frame_packets):
                     continue
 
-                # if all frames 
                 collected_frames += 1
             
             # prepare processes for saving in the background
-            for cam in zmq_sub_buf.cameras:
+            for cam in multi_zmq_sub.cameras:
                 
                 # assign save path to camera subdirectory  and create directory if it does not exist
                 save_path = os.path.join(video_params.save_path, cam.uuid)
@@ -100,7 +96,7 @@ def write_videos_from_zmq_stream(zmq_sub_buf: MultiCameraZMQSubscriberBufferProc
                 save_video_processes[cam.uuid] = Process(
                     target=save_video_from_queue, 
                     args=(
-                        zmq_sub_buf.frame_packet_Q[cam.uuid],
+                        multi_zmq_sub.frame_packet_Q[cam.uuid],
                         os.path.join(save_path, f"{video_id}.mp4"),
                         video_params),
                     daemon=True)
@@ -123,7 +119,7 @@ def write_videos_from_zmq_stream(zmq_sub_buf: MultiCameraZMQSubscriberBufferProc
         logger.info("all save video processes stopped")
 
 
-def save_images_from_zmq_stream(zmq_sub_buf: MultiCameraZMQSubscriberBufferProcess, image_params: ImageParameters):
+def save_images_from_zmq_stream(zmq_sub_buf: MultiCameraZMQSubscriber, image_params: ImageParameters):
 
     assert os.path.exists(image_params.save_path), f"save path {image_params.save_path} does not exist"
 
