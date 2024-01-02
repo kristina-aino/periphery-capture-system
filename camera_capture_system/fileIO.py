@@ -151,7 +151,7 @@ def save_images_from_zmq_stream(zmq_sub_buf: MultiCameraZMQSubscriber, image_par
     except KeyboardInterrupt:
         logger.info("KeyboardInterrupt ...")
     except:
-        logger.error("Unexpected error:", format_exc())
+        logger.error(format_exc())
         raise
     finally:
         executor.shutdown(wait=True)

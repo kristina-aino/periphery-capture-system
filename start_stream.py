@@ -36,5 +36,5 @@ try:
 except KeyboardInterrupt:
     logger.info(f"KeyboardInterrupt ...")
 except:
-    logger.error("Unexpected error:", format_exc())
+    logger.error(format_exc())
     raise

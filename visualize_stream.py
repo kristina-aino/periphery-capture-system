@@ -46,7 +46,7 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         logger.info(f"KeyboardInterrupt ...")
     except:
-        logger.error("Unexpected error:", format_exc())
+        logger.error(format_exc())
         raise
     finally:
         cv2.destroyAllWindows()

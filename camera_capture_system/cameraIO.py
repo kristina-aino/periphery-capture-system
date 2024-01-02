@@ -32,14 +32,14 @@ class CameraInputReader:
         # set backend and capture
         self.capture = cv2.VideoCapture(self.camera.id, CV2_BACKENDS.get(system(), cv2.CAP_ANY))
         
-        # set capture parameters and test
-        set_fps = self.capture.set(cv2.CAP_PROP_FPS, self.camera.fps)
-        set_width = self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, self.camera.width)
-        set_height = self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, self.camera.height)
+        # # set capture parameters and test
+        # set_fps = self.capture.set(cv2.CAP_PROP_FPS, self.camera.fps)
+        # set_width = self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, self.camera.width)
+        # set_height = self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, self.camera.height)
         
-        logger.info(f"{self.camera.uuid} :: set fps to {self.capture.get(cv2.CAP_PROP_FPS)}")
-        logger.warn(f"{self.camera.uuid} :: set width to {self.capture.get(cv2.CAP_PROP_FRAME_WIDTH)}")
-        logger.warn(f"{self.camera.uuid} :: set height to {self.capture.get(cv2.CAP_PROP_FRAME_HEIGHT)}")
+        # logger.info(f"{self.camera.uuid} :: set fps to {self.capture.get(cv2.CAP_PROP_FPS)}")
+        # logger.warn(f"{self.camera.uuid} :: set width to {self.capture.get(cv2.CAP_PROP_FRAME_WIDTH)}")
+        # logger.warn(f"{self.camera.uuid} :: set height to {self.capture.get(cv2.CAP_PROP_FRAME_HEIGHT)}")
         
         # initialize camera befor use
         self.initialize()
