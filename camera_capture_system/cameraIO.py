@@ -14,7 +14,7 @@ logger = getLogger(__name__)
 # ------------------- OpenCV Camera Input Reader ------------------- #
 
 CV2_BACKENDS = {
-    "Windows": cv2.CAP_ANY,
+    "Windows": cv2.CAP_MSMF,
     "Linux": cv2.CAP_V4L2,
     "Darwin": cv2.CAP_AVFOUNDATION
 }
@@ -30,16 +30,16 @@ class CameraInputReader:
         logger.debug(f"{self.camera.uuid} :: Camera information: {self.camera}")
         
         # set backend and capture
-        self.capture = cv2.VideoCapture(self.camera.id, CV2_BACKENDS.get(system(), cv2.CAP_ANY))
+        self.capture = cv2.VideoCapture(self.camera.id)
         
-        # # set capture parameters and test
-        # set_fps = self.capture.set(cv2.CAP_PROP_FPS, self.camera.fps)
-        # set_width = self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, self.camera.width)
-        # set_height = self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, self.camera.height)
+        # set capture parameters and test
+        set_fps = self.capture.set(cv2.CAP_PROP_FPS, self.camera.fps)
+        set_width = self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, self.camera.width)
+        set_height = self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, self.camera.height)
         
-        # logger.info(f"{self.camera.uuid} :: set fps to {self.capture.get(cv2.CAP_PROP_FPS)}")
-        # logger.warn(f"{self.camera.uuid} :: set width to {self.capture.get(cv2.CAP_PROP_FRAME_WIDTH)}")
-        # logger.warn(f"{self.camera.uuid} :: set height to {self.capture.get(cv2.CAP_PROP_FRAME_HEIGHT)}")
+        logger.info(f"{self.camera.uuid} :: set fps to {self.capture.get(cv2.CAP_PROP_FPS)}")
+        logger.warn(f"{self.camera.uuid} :: set width to {self.capture.get(cv2.CAP_PROP_FRAME_WIDTH)}")
+        logger.warn(f"{self.camera.uuid} :: set height to {self.capture.get(cv2.CAP_PROP_FRAME_HEIGHT)}")
         
         # initialize camera befor use
         self.initialize()
@@ -49,7 +49,7 @@ class CameraInputReader:
     
     def initialize(self):
         
-        logger.info(f"{self.camera.uuid} :: Start Camera Initialization ...")
+        logger.info(f"{self.camera.uuid} :: Start Camera Initialization (is open: {self.is_open()}) ...")
         
         try:
             # try open camera
@@ -57,7 +57,7 @@ class CameraInputReader:
                 
                 logger.info(f"{self.camera.uuid} :: Attempting to open capture {self.fail_counter}/{self.max_consec_failures} ...")
                 
-                self.capture.open(self.camera.id, CV2_BACKENDS.get(system(), cv2.CAP_ANY))
+                self.capture.open(self.camera.id) #, CV2_BACKENDS.get(system(), cv2.CAP_ANY))
                 sleep(0.5)
                 self.fail_counter += 1
                 assert self.fail_counter < self.max_consec_failures, f"{self.camera.uuid} :: Failed to open capture after {self.fail_counter} attempts"
@@ -73,11 +73,11 @@ class CameraInputReader:
         
     def close(self):
         self.capture.release()
-        logger.info(f"{self.camera.uuid} :: Capture closed!")
+        logger.info(f"{self.camera.uuid} :: Capture closed")
         
     def read_(self):
         
-        assert self.is_open(), f" {self.camera.uuid} :: AsyncCameraCapture is not open but attempted to read"
+        assert self.is_open(), f"{self.camera.uuid} :: camera not open but attempted to read"
         
         try:
             # try read frame and define camera read time
@@ -87,30 +87,26 @@ class CameraInputReader:
 
             # count incorrect reads
             if not ok:
-                raise RuntimeError(f"{self.camera.uuid} :: reader returned not ok")
+                # log warning and increment fail counter
+                logger.warning(f"{self.camera.uuid} :: reader issue for {self.fail_counter}/{self.max_consec_failures} frames ...")
+                self.fail_counter += 1
+                sleep(0.33)
+                return None
+            # close and throw if too many failures
+            assert self.fail_counter < self.max_consec_failures, f"{self.camera.uuid} :: no valid frame found after {self.fail_counter} consecutive attempts"
             
             # successfull read, reset fail counter and return
             self.fail_counter = 0
             return frame, start_read_dt, end_read_dt
         
         except KeyboardInterrupt:
+            logger.info(f"KeyboardInterrupt ...")
+            self.close()
             raise
-        except RuntimeError as e:
-            
-            # log warning and increment fail counter
-            logger.warning(f"{self.camera.uuid} :: reader issue for {self.fail_counter}/{self.max_consec_failures} frames ...")
-            logger.warning(f"{self.camera.uuid} :: Exception: {e}")
-            self.fail_counter += 1
-            
-            # close and throw if too many failures
-            if self.fail_counter >= self.max_consec_failures:
-                self.close()
-                raise Exception(f"{self.camera.uuid} :: no valid frame found after {self.fail_counter} consecutive attempts")
-            
-            # otherwise wait and return None
-            sleep(0.5)
-            return None
-        
+        except:
+            logger.error(format_exc())
+            self.close()
+            raise
     def read(self):
         ret = self.read_()
         if not ret:

@@ -65,6 +65,7 @@ def write_videos_from_zmq_stream(multi_zmq_sub: MultiCameraZMQSubscriber, video_
     
     frames_per_video = video_params.fps * video_params.seconds
     save_video_processes = {}
+    video_frame_queues = {cam.uuid: Queue() for cam in multi_zmq_sub.cameras}
 
     try:
         
@@ -72,18 +73,22 @@ def write_videos_from_zmq_stream(multi_zmq_sub: MultiCameraZMQSubscriber, video_
 
             logger.info(f"reading frames ...")
             collected_frames = 0
-            video_id = datetime.now().strftime("%Y-%m-%d_%H-%M-%S-%f")
+            video_id = datetime.now().isoformat().replace(":", "-")
             
+            # collect frames until specified video length
             while collected_frames < frames_per_video:
 
-                # try read buffered frames
+                # read frames from zmq
                 all_frame_packets = multi_zmq_sub.receive()
                 if not all_frame_packets or not all(all_frame_packets):
                     continue
 
                 collected_frames += 1
+                for frame_packet in all_frame_packets:
+                    video_frame_queues[frame_packet.camera.uuid].put(frame_packet)
             
-            # prepare processes for saving in the background
+            
+            # after collecting enough frames, prepare processes for saving in the background
             for cam in multi_zmq_sub.cameras:
                 
                 # assign save path to camera subdirectory  and create directory if it does not exist
@@ -115,38 +120,40 @@ def write_videos_from_zmq_stream(multi_zmq_sub: MultiCameraZMQSubscriber, video_
             if save_video_processes[cam_uuid].is_alive():
                 save_video_processes[cam_uuid].join()
                 save_video_processes[cam_uuid].close()
-        zmq_sub_buf.stop()
+        for cam_uuid in video_frame_queues:
+            video_frame_queues[cam_uuid].close()
+        multi_zmq_sub.stop()
         logger.info("all save video processes stopped")
 
 
-def save_images_from_zmq_stream(zmq_sub_buf: MultiCameraZMQSubscriber, image_params: ImageParameters):
+def save_images_from_zmq_stream(multi_zmq_sub: MultiCameraZMQSubscriber, image_params: ImageParameters):
 
     assert os.path.exists(image_params.save_path), f"save path {image_params.save_path} does not exist"
 
     executor = ThreadPoolExecutor(8)
     try:
         
-        zmq_sub_buf.start()
-        
         while True:
             
-            # try read buffered frames
-            all_frama_packets = zmq_sub_buf.get_all_frame_packets()
-            if not all_frama_packets or not all(all_frama_packets):
+            # try read frames
+            read_dt = datetime.now().isoformat().replace(":", "-")
+            
+            all_frame_packets = multi_zmq_sub.receive()
+            if not all_frame_packets or not all(all_frame_packets):
                 continue
 
             # save frames
-            for fp in all_frama_packets:
+            for frame_packet in all_frame_packets:
                 
                 # create cam directory and create if nessesary
-                save_path = os.path.join(image_params.save_path, fp.camera_uuid)
+                save_path = os.path.join(image_params.save_path, frame_packet.camera.camera_uuid)
                 if not os.path.exists(save_path):
-                    logger.info(f"creating directory for {fp.camera_uuid} ...")
+                    logger.info(f"creating directory for {frame_packet.camera.camera_uuid} ...")
                     os.makedirs(save_path)    
                 
                 # create image uri and start savve image thread
-                image_uri = os.path.join(save_path, fp.timestamp.strftime("%Y-%m-%d_%H-%M-%S-%f"))
-                executor.submit(save_image(fp, image_uri, image_params))
+                image_uri = os.path.join(save_path, read_dt)
+                executor.submit(save_image(frame_packet.camera_frame, image_uri, image_params))
 
     except KeyboardInterrupt:
         logger.info("KeyboardInterrupt ...")
@@ -155,3 +162,4 @@ def save_images_from_zmq_stream(zmq_sub_buf: MultiCameraZMQSubscriber, image_par
         raise
     finally:
         executor.shutdown(wait=True)
+        multi_zmq_sub.stop()

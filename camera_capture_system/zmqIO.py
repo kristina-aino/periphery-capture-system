@@ -57,7 +57,7 @@ class ZMQPublisher():
         
         # debug the record time
         dt = frame_packet.start_read_dt.timestamp() - self.last_start_read_dt.timestamp()
-        logger.debug(f"ZMQPublisher {self.con_str} published frame: {frame_packet.camera.uuid} :: fps: {1/dt}")
+        logger.debug(f"ZMQPublisher {self.con_str} published frame: {frame_packet.camera.uuid} :: fps: {1/(dt+1e-5)}")
         self.last_start_read_dt = frame_packet.start_read_dt
         
     async def async_publish(self, frame_packet: CameraFramePacket):

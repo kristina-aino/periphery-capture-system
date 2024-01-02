@@ -7,7 +7,7 @@ import argparse
 AP = argparse.ArgumentParser()
 AP.add_argument("-cc", "--cameras_config", type=str, default="./cameras_configs.json", help="path to input configuration file")
 AP.add_argument("-hn", "--host_name", type=str, default="127.0.0.1", help="host name or ip of the server")
-AP.add_argument("-p", "--ports", nargs="+", default=[10000, 10001], help="port to opsn zmq socket on")
+AP.add_argument("-p", "--ports", nargs="+", default=[10000, 10001, 10002], help="port to opsn zmq socket on")
 AP.add_argument("-ll", "--logging_level", type=str, default="info", help="logging level", choices=["debug", "warning", "error"])
 AP.add_argument("-pm", "--publishing_mode", type=str, default="ALL_AVAILABLE", help="publishing mode", choices=["ALL_AVAILABLE"])
 AP.add_argument("-mcrf", "--max_consec_reader_failures", type=int, default=10, help="max consecutive reader failures")
