@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 from multiprocessing import Queue, Process
 
 from .datamodel import CameraFramePacket, ImageParameters, VideoParameters
-from .core import MultiCameraZMQSubscriber
+from .core import MultiCaptureSubscriber
 
 # ------------------- Logging ------------------- #
 
@@ -58,7 +58,7 @@ def save_image(frame_packet: CameraFramePacket, image_uri: str, image_params: Im
 
 # ------------------- Functionality ------------------- #
 
-def write_videos_from_zmq_stream(multi_zmq_sub: MultiCameraZMQSubscriber, video_params: VideoParameters):
+def write_videos_from_zmq_stream(multi_zmq_sub: MultiCaptureSubscriber, video_params: VideoParameters):
         
     # ensure directory exists
     assert os.path.exists(video_params.save_path), f"save path {video_params.save_path} does not exist"
@@ -126,7 +126,7 @@ def write_videos_from_zmq_stream(multi_zmq_sub: MultiCameraZMQSubscriber, video_
         logger.info("all save video processes stopped")
 
 
-def save_images_from_zmq_stream(multi_zmq_sub: MultiCameraZMQSubscriber, image_params: ImageParameters):
+def save_images_from_zmq_stream(multi_zmq_sub: MultiCaptureSubscriber, image_params: ImageParameters):
 
     assert os.path.exists(image_params.save_path), f"save path {image_params.save_path} does not exist"
 

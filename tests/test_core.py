@@ -6,15 +6,13 @@ from camera_capture_system import core
 @patch('camera_capture_system.core.ZMQPublisher')
 def test_multi_camera_capture_and_publish_init(mock_ZMQPublisher, mock_CameraInputReader):
     cameras = [MagicMock() for _ in range(3)]
-    ports = [8000, 8001, 8002]
     host_name = "127.0.0.1"
     max_consec_reader_failures = 10
     PUBLISHING_MODE = "ALL_AVAILABLE"
 
-    multi_cam_cap_pub = core.MultiCameraCaptureAndPublish(cameras, ports, host_name, max_consec_reader_failures, PUBLISHING_MODE)
+    multi_cam_cap_pub = core.MultiCapturePublisher(cameras, host_name, max_consec_reader_failures, PUBLISHING_MODE)
 
     assert len(multi_cam_cap_pub.async_camera_captures) == len(cameras)
-    assert len(multi_cam_cap_pub.async_zmq_publishers) == len(ports)
     assert all(isinstance(capture, MagicMock) for capture in multi_cam_cap_pub.async_camera_captures)
     assert all(isinstance(publisher, MagicMock) for publisher in multi_cam_cap_pub.async_zmq_publishers)
     assert multi_cam_cap_pub.PUBLISHING_MODE == PUBLISHING_MODE

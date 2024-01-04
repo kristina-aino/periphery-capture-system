@@ -17,7 +17,7 @@ class TestZMQPublisher(unittest.TestCase):
         mock_context.return_value.socket.return_value = mock_socket
         type(mock_context.return_value).closed = PropertyMock(return_value=False)
 
-        publisher = ZMQPublisher(host_name="172.0.0.1", port=10000)
+        publisher = ZMQPublisher(host_name="127.0.0.1", port=10000)
         self.assertTrue(publisher.is_ok())
 
     @patch('camera_capture_system.zmqIO.Context')
@@ -25,7 +25,7 @@ class TestZMQPublisher(unittest.TestCase):
         mock_socket = MagicMock()
         mock_context.return_value.socket.return_value = mock_socket
 
-        publisher = ZMQPublisher(host_name="172.0.0.1", port=10000)
+        publisher = ZMQPublisher(host_name="127.0.0.1", port=10000)
         publisher.close()
 
         mock_socket.close.assert_called_once()
@@ -36,7 +36,7 @@ class TestZMQPublisher(unittest.TestCase):
         mock_socket = MagicMock()
         mock_context.return_value.socket.return_value = mock_socket
 
-        publisher = ZMQPublisher(host_name="172.0.0.1", port=10000)
+        publisher = ZMQPublisher(host_name="127.0.0.1", port=10000)
         camera_frame_packet = MagicMock()
         camera_frame_packet.dump.return_value = (np.array([[1, 2], [3, 4]], dtype=np.uint8), MagicMock())
 
@@ -51,7 +51,7 @@ class TestZMQPublisher(unittest.TestCase):
         mock_context.return_value.socket.return_value = mock_socket
         type(mock_context.return_value).closed = PropertyMock(return_value=False)
 
-        publisher = ZMQPublisher(host_name="172.0.0.1", port=10000)
+        publisher = ZMQPublisher(host_name="127.0.0.1", port=10000)
         camera_frame_packet = MagicMock()
         camera_frame_packet.dump.return_value = (np.array([[1, 2], [3, 4]], dtype=np.uint8), MagicMock())
 
@@ -67,7 +67,7 @@ class TestZMQPublisher(unittest.TestCase):
         mock_context.return_value.socket.return_value = mock_socket
         type(mock_context.return_value).closed = PropertyMock(return_value=False)
 
-        publisher = ZMQPublisher(host_name="172.0.0.1", port=10000)
+        publisher = ZMQPublisher(host_name="127.0.0.1", port=10000)
         camera_frame_packet = MagicMock()
         camera_frame_packet.dump.return_value = (np.array([[1, 2], [3, 4]], dtype=np.uint8), MagicMock())
 
@@ -87,7 +87,7 @@ class TestZMQSubscriber(unittest.TestCase):
         mock_context.return_value.socket.return_value = mock_socket
         type(mock_context.return_value).closed = PropertyMock(return_value=False)
 
-        subscriber = ZMQSubscriber(host_name="172.0.0.1", port=10000)
+        subscriber = ZMQSubscriber(host_name="127.0.0.1", port=10000)
         self.assertTrue(subscriber.is_ok())
 
     @patch('camera_capture_system.zmqIO.Context')
@@ -97,7 +97,7 @@ class TestZMQSubscriber(unittest.TestCase):
         mock_context.return_value.socket.return_value = mock_socket
         type(mock_context.return_value).closed = PropertyMock(return_value=False)
 
-        subscriber = ZMQSubscriber(host_name="172.0.0.1", port=10000)
+        subscriber = ZMQSubscriber(host_name="127.0.0.1", port=10000)
         subscriber.close()
 
         mock_socket.close.assert_called_once()
@@ -130,7 +130,7 @@ class TestZMQSubscriber(unittest.TestCase):
         }
         mock_socket.recv.return_value = np.array([[1, 2], [3, 4]], dtype=np.uint8).tobytes()
 
-        subscriber = ZMQSubscriber(host_name="172.0.0.1", port=10000)
+        subscriber = ZMQSubscriber(host_name="127.0.0.1", port=10000)
         result = subscriber.recieve()
 
         mock_socket.recv_json.assert_called_once()
@@ -165,7 +165,7 @@ class TestZMQSubscriber(unittest.TestCase):
         }
         mock_socket.recv.return_value = np.array([[1, 2], [3, 4]], dtype=np.uint8).tobytes()
 
-        subscriber = ZMQSubscriber(host_name="172.0.0.1", port=10000)
+        subscriber = ZMQSubscriber(host_name="127.0.0.1", port=10000)
 
         loop = get_event_loop()
         result = loop.run_until_complete(subscriber.async_recieve())

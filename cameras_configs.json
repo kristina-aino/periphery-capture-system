@@ -1,26 +1,29 @@
 {
   "cam0": {
-    "id": 2,
-    "width": 1920,
-    "height": 1080,
-    "fps": 60,
-    "name": "Logitech-StreamCam",
-    "position": "center"
-  },
-  "cam1": {
-    "id": 2,
-    "width": 1920,
-    "height": 1080,
-    "fps": 60,
-    "name": "Razer-Kiyo-Pro",
-    "position": "top-right"
-  },
-  "cam2": {
     "id": 0,
     "width": 1920,
     "height": 1080,
     "fps": 60,
-    "name": "Razer-Kiyo-Pro",
-    "position": "top-left"
+    "publishing_port": 10000,
+    "name": "Logitech-StreamCam",
+    "position": "center"
+  },
+  "cam1": {
+    "id": 1,
+    "width": 1920,
+    "height": 1080,
+    "fps": 60,
+    "publishing_port": 10001,
+    "name": "Razer-Kiyo-1",
+    "position": "center"
+  },
+  "cam2": {
+    "id": 2,
+    "width": 1920,
+    "height": 1080,
+    "fps": 60,
+    "publishing_port": 10002,
+    "name": "Razer-Kiyo-2",
+    "position": "center"
   }
 }

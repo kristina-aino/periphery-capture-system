@@ -27,19 +27,19 @@ class CameraInputReader:
         self.fail_counter = 0
         
         logger.debug(f"{self.camera.uuid} :: Initializing capture with backend {CV2_BACKENDS.get(system(), cv2.CAP_ANY)} ...")
-        logger.debug(f"{self.camera.uuid} :: Camera information: {self.camera}")
+        logger.debug(f"{self.camera.uuid} :: Camera config information: {self.camera}")
         
         # set backend and capture
-        self.capture = cv2.VideoCapture(self.camera.id)
+        self.capture = cv2.VideoCapture(self.camera.id, CV2_BACKENDS.get(system(), cv2.CAP_ANY))
         
         # set capture parameters and test
         set_fps = self.capture.set(cv2.CAP_PROP_FPS, self.camera.fps)
         set_width = self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, self.camera.width)
         set_height = self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, self.camera.height)
         
-        logger.info(f"{self.camera.uuid} :: set fps to {self.capture.get(cv2.CAP_PROP_FPS)}")
-        logger.warn(f"{self.camera.uuid} :: set width to {self.capture.get(cv2.CAP_PROP_FRAME_WIDTH)}")
-        logger.warn(f"{self.camera.uuid} :: set height to {self.capture.get(cv2.CAP_PROP_FRAME_HEIGHT)}")
+        logger.info(f"{self.camera.uuid} :: fps was set to {self.capture.get(cv2.CAP_PROP_FPS)}, success: {set_fps}")
+        logger.info(f"{self.camera.uuid} :: width was set to {self.capture.get(cv2.CAP_PROP_FRAME_WIDTH)}, success: {set_width}")
+        logger.info(f"{self.camera.uuid} :: height was set to {self.capture.get(cv2.CAP_PROP_FRAME_HEIGHT)}, success: {set_height}")
         
         # initialize camera befor use
         self.initialize()
@@ -49,27 +49,40 @@ class CameraInputReader:
     
     def initialize(self):
         
-        logger.info(f"{self.camera.uuid} :: Start Camera Initialization (is open: {self.is_open()}) ...")
+        logger.info(f"{self.camera.uuid} :: Start Camera Initialization ...")
         
         try:
-            # try open camera
-            while not self.is_open() and self.fail_counter < self.max_consec_failures:
-                
-                logger.info(f"{self.camera.uuid} :: Attempting to open capture {self.fail_counter}/{self.max_consec_failures} ...")
-                
-                self.capture.open(self.camera.id) #, CV2_BACKENDS.get(system(), cv2.CAP_ANY))
-                sleep(0.5)
-                self.fail_counter += 1
-                assert self.fail_counter < self.max_consec_failures, f"{self.camera.uuid} :: Failed to open capture after {self.fail_counter} attempts"
-            self.fail_counter = 0
+            open_attempts = 0
             
-            # try read frame
-            for _ in range(self.max_consec_failures):
-                ret = self.read()
+            while True:
+                
+                assert open_attempts < self.max_consec_failures, f"{self.camera.uuid} :: Failed to open capture after {open_attempts} attempts"
+                
+                logger.info(f"{self.camera.uuid} :: Attempting to open capture {open_attempts}/{self.max_consec_failures} ...")
+                
+                # try read frames
+                if not self.is_open():
+                    
+                    logger.warn(f"{self.camera.uuid} :: Capture not open ...")
+                    
+                    self.capture.open(self.camera.id, CV2_BACKENDS.get(system(), cv2.CAP_ANY))
+                    sleep(0.33)
+                    open_attempts += 1
+                    continue
+                
+                read_attempts = 0
+                for _ in range(self.max_consec_failures):
+                    logger.info(f"{self.camera.uuid} :: Capture open, try reading {read_attempts}/{self.max_consec_failures} ...")
+                    
+                    ok, _ = self.capture.read()
+                    if ok:
+                        logger.info(f"{self.camera.uuid} :: Camera initialization successful!")
+                        return
+                    read_attempts += 1
+                
+            
         except:
             raise
-        
-        logger.info(f"{self.camera.uuid} :: Camera initialization successful!")
         
     def close(self):
         self.capture.release()
@@ -90,10 +103,11 @@ class CameraInputReader:
                 # log warning and increment fail counter
                 logger.warning(f"{self.camera.uuid} :: reader issue for {self.fail_counter}/{self.max_consec_failures} frames ...")
                 self.fail_counter += 1
+                # close and throw if too many failures
+                assert self.fail_counter < self.max_consec_failures, f"{self.camera.uuid} :: no valid frame found after {self.fail_counter} consecutive attempts"
+                
                 sleep(0.33)
                 return None
-            # close and throw if too many failures
-            assert self.fail_counter < self.max_consec_failures, f"{self.camera.uuid} :: no valid frame found after {self.fail_counter} consecutive attempts"
             
             # successfull read, reset fail counter and return
             self.fail_counter = 0
@@ -107,6 +121,7 @@ class CameraInputReader:
             logger.error(format_exc())
             self.close()
             raise
+        
     def read(self):
         ret = self.read_()
         if not ret:

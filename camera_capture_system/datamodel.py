@@ -9,6 +9,7 @@ StrictNonEmptyStr = Annotated[StrictStr, Field(min_length=1), Strict()]
 class Camera(BaseModel):
     uuid: StrictNonEmptyStr # unique identifier for the camera
     id: Annotated[StrictInt, Field(ge=0)] # index of the camera in the system (opencv index)
+    publishing_port: Annotated[StrictInt, Field(ge=1025, le=65535)] # port to publish camera data to
     width: Annotated[StrictInt, Field(ge=640, le=3840)]
     height: Annotated[StrictInt, Field(ge=480, le=2160)]
     fps: Annotated[StrictInt, Field(ge=15, le=120)]
