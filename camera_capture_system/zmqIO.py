@@ -1,5 +1,4 @@
 from datetime import datetime
-from zmq.asyncio import Context
 from zmq import SNDMORE, SUBSCRIBE, SUB, PUB, Context, SNDHWM, RCVHWM
 from numpy import ascontiguousarray, frombuffer, ndarray, uint8
 from logging import getLogger

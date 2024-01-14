@@ -29,7 +29,9 @@ if __name__ == "__main__":
     
     try:
         
-        for frame_packets in mcs.receive():
+        read_generator = mcs.start()
+        
+        for frame_packets in read_generator:
             
             for frame_packet in frame_packets:
                 

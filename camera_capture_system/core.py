@@ -3,7 +3,7 @@ from logging import getLogger
 from typing import List
 from json import load
 from traceback import format_exc
-from multiprocessing import Process, Event
+from multiprocessing import Process, Event, Queue
 
 from .datamodel import Camera
 from .cameraIO import CameraInputReader
@@ -16,24 +16,75 @@ logger = getLogger(__name__)
 #----------------------------------------
 
 def load_all_cameras_from_config(config_path: str) -> List[Camera]:
-    
     logger.debug(f"Loading cameras from {config_path} ...")
-    
     with open(config_path, "r") as f:
         cameras = load(f)
-
     return [Camera(**cameras[cam_uuid], uuid=cam_uuid) for cam_uuid in cameras]
 
-class ZMQPublisherProcessWithBuffer:
+
+class CaptureSubscriber:
     """
-        Publishes data from a single camera to a ZMQ socket, as a process.
-        The process should be recoverable
-        
-        #TODO
+        Subscribes to a ZMQ socket and returns the data.
     """
     
-    def __init__(self):
-        return NotImplemented
+    def __init__(self, camera: Camera, host: str = "127.0.0.1"):
+        
+        self.camera = camera
+        self. host = host
+        
+        self.stop_event = Event()
+        self.output_queue = Queue(maxsize=10)
+        self.process = None
+        
+    def start_process(self):
+        if self.process is not None:
+            logger.warning(f"{self.camera.uuid} :: trying to start a process that has already started")
+            return
+        
+        logger.info(f"{self.camera.uuid} :: starting capture subscriber process ...")
+        self.stop_event.clear()
+        process = Process(target=self._start)
+        process.start()
+        self.process = process
+        
+    def stop_process(self, terminate=False):
+        if self.process is None:
+            logger.warning(f"{self.camera.uuid} :: trying to stop a process that has not started")
+            return
+        
+        logger.info(f"{self.camera.uuid} :: stopping capture subscriber process and clear queue ...")
+        self.stop_event.set()
+        if terminate:
+            self.process.terminate()
+        self.process.join()
+        self.process = None
+        
+        
+    def _start(self):
+        
+        logger.info(f"{self.camera.uuid} :: starting capture subscriber")
+        
+        try:
+            
+            zmq_subscriber = ZMQSubscriber(self.host, self.camera.publishing_port)
+            
+            while self.stop_event is None or not self.stop_event.is_set():
+                
+                assert zmq_subscriber.is_ok(), f"{self.camera.uuid} :: zmq subscriber is not ok"
+                
+                # read frame from capture and put in queue
+                frame_packet = zmq_subscriber.recieve()
+                self.output_queue.put(frame_packet, timeout=1)
+                
+        except KeyboardInterrupt:
+            logger.info("KeyboardInterrupt ...")
+        except:
+            raise
+        finally:
+            zmq_subscriber.close()
+            
+    def read(self):
+        return self.output_queue.get(timeout=1)
 
 class MultiCaptureSubscriber:
     """
@@ -41,60 +92,87 @@ class MultiCaptureSubscriber:
     """
     
     def __init__(self, cameras: List[Camera], host: str = "127.0.0.1"):
+        self.capture_subsctibers = {cam.uuid: CaptureSubscriber(cam, host) for cam in cameras}
         
-        self.cameras = cameras
-        self.zmq_subscribers = [ZMQSubscriber(host, cam.publishing_port) for cam in cameras]
+    def stop(self, terminate=False):
+        # stop all capture subscribers processes and wait for cleanup
+        for capture_subscriber in self.capture_subsctibers.values():
+            capture_subscriber.stop_process(terminate=terminate)
+        logger.info("multi cam capture subscriber: stopped")
         
-    def is_ok(self):
-        return all([zmq_sub.is_ok() for zmq_sub in self.zmq_subscribers])
-        
-    def stop(self):
-        for zmq_sub in self.zmq_subscribers:
-            zmq_sub.close()
-        logger.info("multi cam subscriber stopped")
-        
-    def receive(self):
+    def start(self):
         
         try:
-            assert self.is_ok(), "not all subscribers are ok"
-            
+            # start reading from all cameras
+            for capture_subscriber in self.capture_subsctibers.values():
+                capture_subscriber.start_process()
+        except:
+            self.stop(terminate=True)
+            raise
+        
+        try:
             while True:
-                packages = [zmq_sub.recieve() for zmq_sub in self.zmq_subscribers]
                 
+                for capture_subscriber in self.capture_subsctibers.values():
+                    logger.info(f"{capture_subscriber.camera.uuid} :: Q size: {capture_subscriber.output_queue.qsize()}")
+                
+                # read from all cameras, queues shuould block if they are empty
+                packages = [capture_subscriber.read() for capture_subscriber in self.capture_subsctibers.values()]
                 yield packages
             
         except KeyboardInterrupt:
             logger.info("KeyboardInterrupt ...")
         except:
-            logger.error(format_exc())
             raise
         finally:
             self.stop()
-
 
 class CapturePublisher:
     """
         Publishes data from a single camera to a ZMQ socket.
     """
     
-    def __init__(self, camera: Camera, host: int = "127.0.0.1", stop_event: Event = None):
+    def __init__(self, camera: Camera, host: int = "127.0.0.1"):
         
         self.camera = camera
         self.host = host
         
         # for multiprocessing
-        self.stop_event = stop_event
+        self.stop_event = Event()
+        self.process = None
         
-    def start(self):
+    def start_process(self):
+        if self.process is not None:
+            logger.warning(f"{self.camera.uuid} :: trying to start a process that has already started")
+            return
+        
+        logger.info(f"{self.camera.uuid} :: starting capture publisher process ...")
+        self.stop_event.clear()
+        process = Process(target=self._start)
+        process.start()
+        self.process = process
+        
+    def stop_process(self, terminate=False):
+        if self.process is None:
+            logger.warn(f"{self.camera.uuid} :: trying to stop a process that has not started")
+            return
+        
+        logger.info(f"{self.camera.uuid} :: stopping capture publisher process ...")
+        self.stop_event.set()
+        if terminate:
+            self.process.terminate()
+        self.process.join()
+        self.process = None
+        
+    def _start(self):
         
         logger.info(f"{self.camera.uuid} :: starting capture publisher")
         
         try:
-
+            
             zmq_publisher = ZMQPublisher(self.host, self.camera.publishing_port)
             capture = CameraInputReader(self.camera)
-        
-        
+            
             while self.stop_event is None or not self.stop_event.is_set():
                 
                 assert zmq_publisher.is_ok(), f"{self.camera.uuid} :: zmq publisher is not ok"
@@ -112,12 +190,11 @@ class CapturePublisher:
         except KeyboardInterrupt:
             logger.info("KeyboardInterrupt ...")
         except:
-            logger.error(format_exc())
             raise
         finally:
+            # close zmq publisher and capture from inside the process
             zmq_publisher.close()
             capture.close()
-
 
 class MultiCapturePublisher:
     """
@@ -125,66 +202,49 @@ class MultiCapturePublisher:
     """
     
     def __init__(self, cameras: List[Camera], host: str = "127.0.0.1"):
+        self.capture_publishers = {cam.uuid: CapturePublisher(cam, host) for cam in cameras}
         
-        self.cameras = cameras
-        self.stop_events = [Event() for _ in cameras]
-        
-        self.capture_publishers = {cam.uuid: CapturePublisher(cam, host, stop_event) for cam, stop_event in zip(cameras, self.stop_events)}
-        self.capture_publishers_processes = {}
-        
-    def stop(self):
-        for event in self.stop_events:
-            event.set()
-        for process in self.capture_publishers_processes.values():
-            if process.is_alive():
-                process.join()
-        logger.info("multi cam capture and publish stopped")
+    def stop(self, terminate=False):
+        # stop all capture publishers processes and wait for cleanup (unless terminate is set, then terminate immediately)
+        for capture_publisher in self.capture_publishers.values():
+            capture_publisher.stop_process(terminate=terminate)
+        logger.info("multi cam capture publisher: stopped")
         
     def start(self):
         
-        logger.info("starting multi cam capture and publish ...")
+        logger.info("starting multi cam capture publisher ...")
         try:
             # start all capture publishers processes
-            for k in self.capture_publishers:
-                self.capture_publishers_processes[k] = Process(target=self.capture_publishers[k].start)
-                self.capture_publishers_processes[k].start()
-                
+            for capture_publisher in self.capture_publishers.values():
+                capture_publisher.start_process()
         except:
-            for event in self.stop_events:
-                event.set()
-            for process in self.capture_publishers_processes.values():
-                if process.is_alive():
-                    process.terminate()
-                    process.join()
-            logger.error(format_exc())
+            self.stop(terminate=True)
             raise
+        logger.info("multi cam capture publisher started")
         
         try:
             while True:
                 
-                # check if any of the processes have stopped
-                for k in self.capture_publishers:
-                    if not self.capture_publishers_processes[k].is_alive():
-                        logger.warning(f"capture publisher for {k} has stopped")
-                        # self.restart(k)
-                        raise Exception(f"capture publisher for {k} has stopped")
+                # check if any of the processes have stopped and restart if desired
+                for capture_publisher in self.capture_publishers.values():
+                    
+                    if capture_publisher.process is None:
+                        raise Exception(f"capture publisher for {capture_publisher.camera.uuid} has not started")
+                    
+                    if not capture_publisher.process.is_alive():
+                        # TODO: self.restart(k)
+                        raise Exception(f"capture publisher for {capture_publisher.camera.uuid} has stopped")
                 
                 sleep(0.5)
                 
         except KeyboardInterrupt:
             logger.info("KeyboardInterrupt ...")
         except:
-            logger.error(format_exc())
             raise
         finally:
             self.stop()
-    
+        
     def restart(self, cam_uuid):
-        
         logger.info(f"restarting capture publisher for {self.cameras[cam_uuid].uuid} ...")
-        
-        self.stop_events[cam_uuid].set()
-        self.capture_publishers_processes[cam_uuid].join()
-        self.stop_events[cam_uuid].clear()
-        self.capture_publishers_processes[cam_uuid] = Process(target=self.capture_publishers[cam_uuid].start)
-        self.capture_publishers_processes[cam_uuid].start()
+        self.capture_publishers[cam_uuid].stop_process()
+        self.capture_publishers[cam_uuid].start_process()
