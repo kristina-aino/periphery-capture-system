@@ -22,7 +22,6 @@ def load_all_cameras_from_config(config_path: str) -> List[Camera]:
         cameras = load(f)
     return [Camera(**cameras[cam_uuid], uuid=cam_uuid) for cam_uuid in cameras]
 
-
 class CaptureSubscriber:
     """
         Subscribes to a ZMQ socket and returns the data.
@@ -77,6 +76,7 @@ class CaptureSubscriber:
                     frame_packet = zmq_subscriber.recieve()
                     self.output_queue.put(frame_packet, block=False)
                 except queue.Full:
+                    logger.warning(f"{self.camera.uuid} :: capture subscriber queue is full, dropping frame")
                     continue
                 
         except KeyboardInterrupt:
@@ -96,7 +96,9 @@ class CaptureSubscriber:
 
 class MultiCaptureSubscriber:
     """
-        Subsribes to a list of ZMQ sockets and returns the data.
+        Subsribes to a list of ZMQ sockets as processes and returns the data.
+        
+        ! calling stop() at termination is the responsibility of the caller !
     """
     
     def __init__(self, cameras: List[Camera], q_size: int, host: str = "127.0.0.1"):
@@ -115,11 +117,17 @@ class MultiCaptureSubscriber:
             for capture_subscriber in self.capture_subsctibers.values():
                 capture_subscriber.start_process()
             
+        except KeyboardInterrupt:
+            logger.info("KeyboardInterrupt ...")
+        except:
+            raise
+        finally:
+            self.stop(terminate=True)
+        
+    def read(self):
+        try:
             # read from all camera subseiber threads queues, returns None if queue is empty (no blocking)
-            while True:
-                packages = [capture_subscriber.read() for capture_subscriber in self.capture_subsctibers.values()]
-                yield packages
-                
+            return [capture_subscriber.read() for capture_subscriber in self.capture_subsctibers.values()]
         except KeyboardInterrupt:
             logger.info("KeyboardInterrupt ...")
         except:

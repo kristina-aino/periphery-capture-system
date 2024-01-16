@@ -14,7 +14,6 @@ class Camera(BaseModel):
     height: Annotated[StrictInt, Field(ge=480, le=2160)]
     fps: Annotated[StrictInt, Field(ge=15, le=120)]
     name: StrictNonEmptyStr
-    position: StrictNonEmptyStr
 
 
 class VideoParameters(BaseModel):
@@ -36,7 +35,7 @@ class CameraFramePacket:
     camera_frame: ndarray[uint8]
     start_read_dt: datetime
     end_read_dt: datetime
-        
+    
     # format data for imagezmq
     def dump(self) -> tuple[ndarray[uint8], dict]:
         return self.camera_frame, {

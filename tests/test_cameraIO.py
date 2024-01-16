@@ -135,8 +135,7 @@ def test_camera_input_reader_read(mock_cv2_video_capture):
         width=1920,
         height=1080,
         fps=30,
-        name="test",
-        position="test",
+        name="test"
     )
     cam_ir = CameraInputReader(camera)
     packet = cam_ir.read()
@@ -159,8 +158,7 @@ async def test_camera_input_reader_async_read(mock_cv2_video_capture):
         width=1920,
         height=1080,
         fps=30,
-        name="test",
-        position="test",
+        name="test"
     )
     cam_ir = CameraInputReader(camera)
     packet = await cam_ir.async_read()

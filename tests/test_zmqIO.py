@@ -123,8 +123,7 @@ class TestZMQSubscriber(unittest.TestCase):
                 "width": 1920,
                 "height": 1080,
                 "fps": 30,
-                "name": "test",
-                "position": "test",
+                "name": "test"
             },
             "start_read_timestamp": datetime.now().timestamp(),
             "end_read_timestamp": datetime.now().timestamp(),
@@ -159,8 +158,7 @@ class TestZMQSubscriber(unittest.TestCase):
                 "width": 1920,
                 "height": 1080,
                 "fps": 30,
-                "name": "test",
-                "position": "test",
+                "name": "test"
             },
             "start_read_timestamp": datetime.now().timestamp(),
             "end_read_timestamp": datetime.now().timestamp(),

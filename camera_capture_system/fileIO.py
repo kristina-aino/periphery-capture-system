@@ -1,12 +1,12 @@
 import os
 import cv2
-import time
 
+from time import sleep
 from traceback import format_exc
 from datetime import datetime
 from logging import getLogger
 from concurrent.futures import ThreadPoolExecutor
-from multiprocessing import Queue, Process
+from multiprocessing import Queue, Process, Pool
 
 from .datamodel import CameraFramePacket, ImageParameters, VideoParameters
 from .core import MultiCaptureSubscriber
@@ -58,51 +58,58 @@ def save_image(frame_packet: CameraFramePacket, image_uri: str, image_params: Im
 
 # ------------------- Functionality ------------------- #
 
-def write_videos_from_zmq_stream(multi_zmq_sub: MultiCaptureSubscriber, video_params: VideoParameters):
-        
+def save_captures_as_videos(multi_capture_subscriber: MultiCaptureSubscriber, video_params: VideoParameters):
+    
     # ensure directory exists
     assert os.path.exists(video_params.save_path), f"save path {video_params.save_path} does not exist"
     
+    # create cam directory and create if necessary
+    for cam_uuid in multi_capture_subscriber.capture_subsctibers:
+        save_path_ = os.path.join(video_params.save_path, cam_uuid)
+        if not os.path.exists(save_path_):
+            logger.info(f"creating directory for {cam_uuid} ...")
+            os.makedirs(save_path_)
+    
+    
     frames_per_video = video_params.fps * video_params.seconds
     save_video_processes = {}
-    video_frame_queues = {cam.uuid: Queue() for cam in multi_zmq_sub.cameras}
-
+    video_frame_queues = {cam.uuid: Queue() for cam in multi_capture_subscriber.cameras}
+    
+    # start multi_capture_subscriber processes
+    multi_capture_subscriber.start()
+    
     try:
         
         while True:
 
             logger.info(f"reading frames ...")
             collected_frames = 0
-            video_id = datetime.now().isoformat().replace(":", "-")
+            video_name = datetime.now().isoformat().replace(":", "-")
             
             # collect frames until specified video length
             while collected_frames < frames_per_video:
 
                 # read frames from zmq
-                all_frame_packets = multi_zmq_sub.receive()
-                if not all_frame_packets or not all(all_frame_packets):
+                all_frame_packets = multi_capture_subscriber.read()
+                if not all(all_frame_packets):
+                    logger.warn("some or all frames where not read, skipping ...")
                     continue
-
+                
                 collected_frames += 1
                 for frame_packet in all_frame_packets:
                     video_frame_queues[frame_packet.camera.uuid].put(frame_packet)
             
             
             # after collecting enough frames, prepare processes for saving in the background
-            for cam in multi_zmq_sub.cameras:
-                
-                # assign save path to camera subdirectory  and create directory if it does not exist
-                save_path = os.path.join(video_params.save_path, cam.uuid)
-                if not os.path.exists(save_path):
-                    logger.info(f"creating directory for {cam.uuid} ...")
-                    os.makedirs(save_path)
+            for cam in multi_capture_subscriber.cameras:
                 
                 # assign process to save video
+                video_uri = os.path.join(video_params.save_path, cam.uuid, f"{video_name}.mp4")
                 save_video_processes[cam.uuid] = Process(
                     target=save_video_from_queue, 
                     args=(
-                        multi_zmq_sub.frame_packet_Q[cam.uuid],
-                        os.path.join(save_path, f"{video_id}.mp4"),
+                        multi_capture_subscriber.frame_packet_Q[cam.uuid],
+                        video_uri,
                         video_params),
                     daemon=True)
             
@@ -122,44 +129,54 @@ def write_videos_from_zmq_stream(multi_zmq_sub: MultiCaptureSubscriber, video_pa
                 save_video_processes[cam_uuid].close()
         for cam_uuid in video_frame_queues:
             video_frame_queues[cam_uuid].close()
-        multi_zmq_sub.stop()
+        multi_capture_subscriber.stop()
         logger.info("all save video processes stopped")
 
 
-def save_images_from_zmq_stream(multi_zmq_sub: MultiCaptureSubscriber, image_params: ImageParameters):
-
+def save_captures_as_images(multi_capture_subscriber: MultiCaptureSubscriber, image_params: ImageParameters, num_workers: int = 8):
+    
+    # check save path exists
     assert os.path.exists(image_params.save_path), f"save path {image_params.save_path} does not exist"
-
-    executor = ThreadPoolExecutor(8)
+    
+    # create cam directory and create if necessary
+    for cam_uuid in multi_capture_subscriber.capture_subsctibers:
+        save_path_ = os.path.join(image_params.save_path, cam_uuid)
+        if not os.path.exists(save_path_):
+            logger.info(f"creating directory for {cam_uuid} ...")
+            os.makedirs(save_path_)
+    
+    # Create a multiprocessing worker pool 
+    pool = Pool(num_workers)
+    
+    # start multi_capture_subscriber processes
+    multi_capture_subscriber.start()
+    
     try:
-        
         while True:
             
-            # try read frames
-            read_dt = datetime.now().isoformat().replace(":", "-")
+            # create datetime for image name
+            image_name = datetime.now().isoformat().replace(":", "-")
             
-            all_frame_packets = multi_zmq_sub.receive()
-            if not all_frame_packets or not all(all_frame_packets):
+            # read frames
+            frame_packets = multi_capture_subscriber.read()
+            if not all(frame_packets):
+                logger.warn("some or all frames where not read, skipping ...")
+                sleep(1)
                 continue
 
             # save frames
-            for frame_packet in all_frame_packets:
-                
-                # create cam directory and create if nessesary
-                save_path = os.path.join(image_params.save_path, frame_packet.camera.camera_uuid)
-                if not os.path.exists(save_path):
-                    logger.info(f"creating directory for {frame_packet.camera.camera_uuid} ...")
-                    os.makedirs(save_path)    
-                
-                # create image uri and start savve image thread
-                image_uri = os.path.join(save_path, read_dt)
-                executor.submit(save_image(frame_packet.camera_frame, image_uri, image_params))
-
+            for frame_packet in frame_packets:
+                # start save image process
+                image_uri = os.path.join(image_params.save_path, frame_packet.camera.camera_uuid, image_name)
+                pool.apply_async(save_image, (frame_packet.camera_frame, image_uri, image_params))
+        
+        
     except KeyboardInterrupt:
         logger.info("KeyboardInterrupt ...")
     except:
         logger.error(format_exc())
         raise
     finally:
-        executor.shutdown(wait=True)
-        multi_zmq_sub.stop()
+        pool.close()
+        pool.join()
+        multi_capture_subscriber.stop()

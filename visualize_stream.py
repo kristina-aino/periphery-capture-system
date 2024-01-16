@@ -25,7 +25,7 @@ from camera_capture_system.core import load_all_cameras_from_config, MultiCaptur
 if __name__ == "__main__":
     
     cameras = load_all_cameras_from_config(ARGS.cameras_config)
-    mcs = MultiCaptureSubscriber(cameras=cameras, host=ARGS.host, q_size=10)
+    mcs = MultiCaptureSubscriber(cameras=cameras, host=ARGS.host, q_size=1)
     
     try:
         

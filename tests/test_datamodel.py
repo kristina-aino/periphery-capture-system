@@ -12,8 +12,7 @@ def test_camera():
         width=1920,
         height=1080,
         fps=30,
-        name="test",
-        position="test",
+        name="test"
     )
 
     # Step 2: Assert that each attribute of the instance matches the test data
@@ -24,23 +23,21 @@ def test_camera():
     assert camera.height == 1080
     assert camera.fps == 30
     assert camera.name == "test"
-    assert camera.position == "test"
 
 @pytest.mark.parametrize(
-    "uuid, id, publishing_port, width, height, fps, name, position",
+    "uuid, id, publishing_port, width, height, fps, name",
     [
-        ("test", -1, 5555, 1920, 1080, 30, "test", "test"),  # Invalid test data (negative id)
-        ("test", 0, 1024, 1920, 1080, 30, "test", "test"),  # Invalid test data (publishing port out of range)
-        ("test", 0, 65536, 1920, 1080, 30, "test", "test"),  # Invalid test data (publishing port out of range)
-        ("test", 0, 5555, 639, 1080, 30, "test", "test"),  # Invalid test data (width out of range)
-        ("test", 0, 5555, 1920, 479, 30, "test", "test"),  # Invalid test data (height out of range)
-        ("test", 0, 5555, 1920, 1080, 10, "test", "test"),  # Invalid test data (fps out of range)
-        ("", 0, 5555, 1920, 1080, 30, "test", "test"),  # Invalid test data (empty uuid)
-        ("test", 0, 5555, 1920, 1080, 30, "", "test"),  # Invalid test data (empty name)
-        ("test", 0, 5555, 1920, 1080, 30, "test", ""),  # Invalid test data (empty position)
+        ("test", -1, 5555, 1920, 1080, 30, "test"),  # Invalid test data (negative id)
+        ("test", 0, 1024, 1920, 1080, 30, "test"),  # Invalid test data (publishing port out of range)
+        ("test", 0, 65536, 1920, 1080, 30, "test"),  # Invalid test data (publishing port out of range)
+        ("test", 0, 5555, 639, 1080, 30, "test"),  # Invalid test data (width out of range)
+        ("test", 0, 5555, 1920, 479, 30, "test"),  # Invalid test data (height out of range)
+        ("test", 0, 5555, 1920, 1080, 10, "test"),  # Invalid test data (fps out of range)
+        ("", 0, 5555, 1920, 1080, 30, "test"),  # Invalid test data (empty uuid)
+        ("test", 0, 5555, 1920, 1080, 30, ""),  # Invalid test data (empty name)
     ]
 )
-def test_camera_type_validators(uuid, id, publishing_port, width, height, fps, name, position):
+def test_camera_type_validators(uuid, id, publishing_port, width, height, fps, name):
     # catch the ValidationError
     with pytest.raises(ValidationError):
         camera = Camera(
@@ -50,8 +47,7 @@ def test_camera_type_validators(uuid, id, publishing_port, width, height, fps, n
             width=width,
             height=height,
             fps=fps,
-            name=name,
-            position=position,
+            name=name
         )
 
 def test_image_parameters():

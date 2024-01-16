@@ -5,8 +5,7 @@
     "height": 1080,
     "fps": 30,
     "publishing_port": 10000,
-    "name": "Logitech-StreamCam",
-    "position": "center"
+    "name": "Logitech-StreamCam.center"
   },
   "cam1": {
     "id": 1,
@@ -14,8 +13,7 @@
     "height": 1080,
     "fps": 30,
     "publishing_port": 10001,
-    "name": "Razer-Kiyo-1",
-    "position": "center"
+    "name": "Razer-Kiyo-1.left"
   },
   "cam2": {
     "id": 2,
@@ -23,7 +21,6 @@
     "height": 1080,
     "fps": 30,
     "publishing_port": 10002,
-    "name": "Razer-Kiyo-2",
-    "position": "center"
+    "name": "Razer-Kiyo-2.right"
   }
 }
