@@ -119,6 +119,7 @@ class TestZMQSubscriber(unittest.TestCase):
             "camera": {
                 "uuid": "test",
                 "id": 0,
+                "publishing_port": 5555,
                 "width": 1920,
                 "height": 1080,
                 "fps": 30,
@@ -154,6 +155,7 @@ class TestZMQSubscriber(unittest.TestCase):
             "camera": {
                 "uuid": "test",
                 "id": 0,
+                "publishing_port": 5555,
                 "width": 1920,
                 "height": 1080,
                 "fps": 30,

@@ -4,6 +4,7 @@ from typing import List
 from json import load
 from traceback import format_exc
 from multiprocessing import Process, Event, Queue
+import queue
 
 from .datamodel import Camera
 from .cameraIO import CameraInputReader
@@ -27,13 +28,13 @@ class CaptureSubscriber:
         Subscribes to a ZMQ socket and returns the data.
     """
     
-    def __init__(self, camera: Camera, host: str = "127.0.0.1"):
+    def __init__(self, camera: Camera, q_size: int, host: str = "127.0.0.1"):
         
         self.camera = camera
         self. host = host
         
         self.stop_event = Event()
-        self.output_queue = Queue(maxsize=10)
+        self.output_queue = Queue(maxsize=q_size)
         self.process = None
         
     def start_process(self):
@@ -59,7 +60,6 @@ class CaptureSubscriber:
         self.process.join()
         self.process = None
         
-        
     def _start(self):
         
         logger.info(f"{self.camera.uuid} :: starting capture subscriber")
@@ -73,8 +73,11 @@ class CaptureSubscriber:
                 assert zmq_subscriber.is_ok(), f"{self.camera.uuid} :: zmq subscriber is not ok"
                 
                 # read frame from capture and put in queue
-                frame_packet = zmq_subscriber.recieve()
-                self.output_queue.put(frame_packet, timeout=1)
+                try:
+                    frame_packet = zmq_subscriber.recieve()
+                    self.output_queue.put(frame_packet, block=False)
+                except queue.Full:
+                    continue
                 
         except KeyboardInterrupt:
             logger.info("KeyboardInterrupt ...")
@@ -84,15 +87,20 @@ class CaptureSubscriber:
             zmq_subscriber.close()
             
     def read(self):
-        return self.output_queue.get(timeout=1)
+        try:
+            return self.output_queue.get(block=False)
+        except queue.Empty:
+            return None
+        except:
+            raise
 
 class MultiCaptureSubscriber:
     """
         Subsribes to a list of ZMQ sockets and returns the data.
     """
     
-    def __init__(self, cameras: List[Camera], host: str = "127.0.0.1"):
-        self.capture_subsctibers = {cam.uuid: CaptureSubscriber(cam, host) for cam in cameras}
+    def __init__(self, cameras: List[Camera], q_size: int, host: str = "127.0.0.1"):
+        self.capture_subsctibers = {cam.uuid: CaptureSubscriber(cam, q_size, host) for cam in cameras}
         
     def stop(self, terminate=False):
         # stop all capture subscribers processes and wait for cleanup
@@ -106,26 +114,18 @@ class MultiCaptureSubscriber:
             # start reading from all cameras
             for capture_subscriber in self.capture_subsctibers.values():
                 capture_subscriber.start_process()
-        except:
-            self.stop(terminate=True)
-            raise
-        
-        try:
+            
+            # read from all camera subseiber threads queues, returns None if queue is empty (no blocking)
             while True:
-                
-                for capture_subscriber in self.capture_subsctibers.values():
-                    logger.info(f"{capture_subscriber.camera.uuid} :: Q size: {capture_subscriber.output_queue.qsize()}")
-                
-                # read from all cameras, queues shuould block if they are empty
                 packages = [capture_subscriber.read() for capture_subscriber in self.capture_subsctibers.values()]
                 yield packages
-            
+                
         except KeyboardInterrupt:
             logger.info("KeyboardInterrupt ...")
         except:
             raise
         finally:
-            self.stop()
+            self.stop(terminate=True)
 
 class CapturePublisher:
     """
@@ -154,7 +154,7 @@ class CapturePublisher:
         
     def stop_process(self, terminate=False):
         if self.process is None:
-            logger.warn(f"{self.camera.uuid} :: trying to stop a process that has not started")
+            logger.warning(f"{self.camera.uuid} :: trying to stop a process that has not started")
             return
         
         logger.info(f"{self.camera.uuid} :: stopping capture publisher process ...")

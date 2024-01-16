@@ -63,7 +63,7 @@ class CameraInputReader:
                 # try read frames
                 if not self.is_open():
                     
-                    logger.warn(f"{self.camera.uuid} :: Capture not open ...")
+                    logger.warning(f"{self.camera.uuid} :: Capture not open ...")
                     
                     self.capture.open(self.camera.id, CV2_BACKENDS.get(system(), cv2.CAP_ANY))
                     sleep(0.33)
@@ -97,7 +97,7 @@ class CameraInputReader:
             start_read_dt = datetime.now()
             ok, frame = self.capture.read()
             end_read_dt = datetime.now()
-
+            
             # count incorrect reads
             if not ok:
                 # log warning and increment fail counter

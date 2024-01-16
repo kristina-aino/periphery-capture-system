@@ -19,6 +19,7 @@ def test_camera_input_reader_init(mock_cv2_video_capture):
     camera = Camera(
         uuid="test",
         id=0,
+        publishing_port=5555,
         width=1920,
         height=1080,
         fps=30,
@@ -42,6 +43,7 @@ def test_camera_input_reader_not_open(mock_cv2_video_capture):
     camera = Camera(
         uuid="test",
         id=0,
+        publishing_port=5555,
         width=1920,
         height=1080,
         fps=30,
@@ -63,6 +65,7 @@ def test_camera_input_reader_no_valid_frame(mock_cv2_video_capture):
     camera = Camera(
         uuid="test",
         id=0,
+        publishing_port=5555,
         width=1920,
         height=1080,
         fps=30,
@@ -84,6 +87,7 @@ def test_camera_input_reader_is_open(mock_cv2_video_capture):
     camera = Camera(
         uuid="test",
         id=0,
+        publishing_port=5555,
         width=1920,
         height=1080,
         fps=30,
@@ -104,6 +108,7 @@ def test_camera_input_reader_close(mock_cv2_video_capture):
     camera = Camera(
         uuid="test",
         id=0,
+        publishing_port=5555,
         width=1920,
         height=1080,
         fps=30,
@@ -126,6 +131,7 @@ def test_camera_input_reader_read(mock_cv2_video_capture):
     camera = Camera(
         uuid="test",
         id=0,
+        publishing_port=5555,
         width=1920,
         height=1080,
         fps=30,
@@ -149,6 +155,7 @@ async def test_camera_input_reader_async_read(mock_cv2_video_capture):
     camera = Camera(
         uuid="test",
         id=0,
+        publishing_port=5555,
         width=1920,
         height=1080,
         fps=30,
