@@ -34,6 +34,7 @@ class CaptureSubscriber:
         
         self.stop_event = Event()
         self.output_queue = Queue(maxsize=q_size)
+        self.q_size = q_size
         self.process = None
         
     def start_process(self):
@@ -47,16 +48,15 @@ class CaptureSubscriber:
         process.start()
         self.process = process
         
-    def stop_process(self, terminate=False):
+    def stop_process(self, terminate: bool):
         if self.process is None:
             logger.warning(f"{self.camera.uuid} :: trying to stop a process that has not started")
             return
         
         logger.info(f"{self.camera.uuid} :: stopping capture subscriber process and clear queue ...")
+        self.output_queue = Queue(maxsize=self.q_size)
         self.stop_event.set()
-        if terminate:
-            self.process.terminate()
-        self.process.join()
+        self.process.terminate() if terminate else self.process.join()
         self.process = None
         
     def _start(self):
@@ -76,7 +76,7 @@ class CaptureSubscriber:
                     frame_packet = zmq_subscriber.recieve()
                     self.output_queue.put(frame_packet, block=False)
                 except queue.Full:
-                    logger.warning(f"{self.camera.uuid} :: capture subscriber queue is full, dropping frame")
+                    # logger.warning(f"{self.camera.uuid} :: capture subscriber queue is full, dropping frame")
                     continue
                 
         except KeyboardInterrupt:
@@ -104,36 +104,20 @@ class MultiCaptureSubscriber:
     def __init__(self, cameras: List[Camera], q_size: int, host: str = "127.0.0.1"):
         self.capture_subsctibers = {cam.uuid: CaptureSubscriber(cam, q_size, host) for cam in cameras}
         
-    def stop(self, terminate=False):
+    def stop(self, terminate : bool = True):
         # stop all capture subscribers processes and wait for cleanup
         for capture_subscriber in self.capture_subsctibers.values():
             capture_subscriber.stop_process(terminate=terminate)
         logger.info("multi cam capture subscriber: stopped")
         
     def start(self):
-        
-        try:
-            # start reading from all cameras
-            for capture_subscriber in self.capture_subsctibers.values():
-                capture_subscriber.start_process()
-            
-        except KeyboardInterrupt:
-            logger.info("KeyboardInterrupt ...")
-        except:
-            raise
-        finally:
-            self.stop(terminate=True)
+        # start reading from all cameras
+        for capture_subscriber in self.capture_subsctibers.values():
+            capture_subscriber.start_process()
         
     def read(self):
-        try:
-            # read from all camera subseiber threads queues, returns None if queue is empty (no blocking)
-            return [capture_subscriber.read() for capture_subscriber in self.capture_subsctibers.values()]
-        except KeyboardInterrupt:
-            logger.info("KeyboardInterrupt ...")
-        except:
-            raise
-        finally:
-            self.stop(terminate=True)
+        # read from all camera subseiber threads queues, returns None if queue is empty (no blocking)
+        return [capture_subscriber.read() for capture_subscriber in self.capture_subsctibers.values()]
 
 class CapturePublisher:
     """

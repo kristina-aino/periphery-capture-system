@@ -19,22 +19,45 @@ ARGS = AP.parse_args()
 # ---------------------------------------------------------------------
 
 logging.basicConfig(level=ARGS.logging_level.upper())
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------
 
-from camera_capture_system.core import load_all_cameras_from_config, MultiCaptureSubscriber
-from camera_capture_system.fileIO import save_captures_as_images
+from camera_capture_system.core import load_all_cameras_from_config
+from camera_capture_system.fileIO import CaptureImageSaver
 from camera_capture_system.datamodel import ImageParameters
 
 if __name__ == "__main__":
     cameras = load_all_cameras_from_config(ARGS.cameras_config)
     
-    mcsb = MultiCaptureSubscriber(cameras=cameras, host=ARGS.host_name, q_size=1)
+    cis = CaptureImageSaver(
+        cameras=cameras,
+        image_params=ImageParameters(
+            output_format=ARGS.output_format,
+            save_path=ARGS.output_path, 
+            jpg_quality=ARGS.jpg_quality, 
+            png_compression=ARGS.png_compression
+        ),
+        host=ARGS.host_name, 
+        q_size=1
+    )
     
-    video_params = ImageParameters(
-        output_format=ARGS.output_format,
-        save_path=ARGS.output_path, 
-        jpg_quality=ARGS.jpg_quality, 
-        png_compression=ARGS.png_compression)
-
-    save_captures_as_images(mcsb, video_params)
+    from time import sleep
+    
+    try:
+        
+        cis.start()
+        
+        while True:
+            
+            cis.save_image()
+            
+            sleep(1)
+            
+    except KeyboardInterrupt:
+        logger.info("KeyboardInterrupt ...")
+    except:
+        raise
+    finally:
+        cis.stop()
+        logger.info("all save image processes stopped")
