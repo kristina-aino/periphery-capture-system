@@ -60,13 +60,6 @@ def save_video_from_queue(frame_packet_queue: Queue, video_uri: str, video_param
     finally:
         video_writer.release()
 
-def save_image(frame_packet: CameraFramePacket, image_uri: str, image_params: ImageParameters):
-    
-    if image_params.output_format == "jpg":
-        cv2.imwrite(image_uri, frame_packet.camera_frame, [int(cv2.IMWRITE_JPEG_QUALITY), image_params.jpg_quality])
-    elif image_params.output_format == "png":
-        cv2.imwrite(image_uri, frame_packet.camera_frame, [int(cv2.IMWRITE_PNG_COMPRESSION), image_params.png_compression])
-
 # ------------------- Functionality ------------------- #
 
 class CaptureVideoSaver(MultiCaptureSubscriber):
@@ -139,7 +132,6 @@ class CaptureVideoSaver(MultiCaptureSubscriber):
     #         multi_capture_subscriber.stop()
     #         logger.info("all save video processes stopped")
 
-
 class CaptureImageSaver(MultiCaptureSubscriber):
     
     def __init__(self, cameras: List[Camera], image_params: ImageParameters, host: str = "127.0.0.1", q_size: int = 1, num_workers: int = 8):
@@ -183,7 +175,13 @@ class CaptureImageSaver(MultiCaptureSubscriber):
         self.pool = None
         super().stop(terminate=terminate)
         
-    def save_image(self):
+    def save_image_(frame_packet: CameraFramePacket, image_uri: str, image_params: ImageParameters):
+        if image_params.output_format == "jpg":
+            cv2.imwrite(image_uri, frame_packet.camera_frame, [int(cv2.IMWRITE_JPEG_QUALITY), image_params.jpg_quality])
+        elif image_params.output_format == "png":
+            cv2.imwrite(image_uri, frame_packet.camera_frame, [int(cv2.IMWRITE_PNG_COMPRESSION), image_params.png_compression])
+        
+    def save_image(self, visualize: bool = False):
         
         # create datetime for image name
         image_name = datetime.now().isoformat().replace(":", "-")
@@ -208,16 +206,22 @@ class CaptureImageSaver(MultiCaptureSubscriber):
                 
                 logger.info(f"saving images in {image_uri} ...")
                 
-                result = self.pool.apply_async(save_image, (frame_packet, image_uri, self.image_params))
+                result = self.pool.apply_async(self.save_image_, (frame_packet, image_uri, self.image_params))
                 self.results.append(result)
+                
+                # visualize
+                if visualize:
+                    cv2.imshow(frame_packet.camera.uuid, frame_packet.camera_frame)
+                    cv2.waitKey(1)
             
-            # Check for errors
-            for result in self.results:
-                try:
-                    result.get(timeout=1)  # This will raise an exception if the function failed
-                except Exception as e:
-                    logger.error(f"Error in save_image function: {e}")
+            # # Check for errors
+            # for result in self.results:
+            #     try:
+            #         result.get(timeout=1)  # This will raise an exception if the function failed
+            #     except Exception as e:
+            #         logger.error(f"Error in save_image function: {e}")
             
         except:
             self.stop()
+            cv2.destroyAllWindows()
             raise
