@@ -23,12 +23,14 @@ logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------
 
-from camera_capture_system.core import load_all_cameras_from_config
+from camera_capture_system.core import load_all_cameras_from_config, MultiCapturePublisher
 from camera_capture_system.fileIO import CaptureImageSaver
 from camera_capture_system.datamodel import ImageParameters
 
 if __name__ == "__main__":
     cameras = load_all_cameras_from_config(ARGS.cameras_config)
+
+    mcp = MultiCapturePublisher(cameras=cameras, host=ARGS.host_name)
     
     cis = CaptureImageSaver(
         cameras=cameras,
@@ -46,6 +48,7 @@ if __name__ == "__main__":
     
     try:
         
+        mcp.start()
         cis.start()
         
         while True:
@@ -60,4 +63,5 @@ if __name__ == "__main__":
         raise
     finally:
         cis.stop()
+        mcp.stop()
         logger.info("all save image processes stopped")

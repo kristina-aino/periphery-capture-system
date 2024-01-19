@@ -4,6 +4,7 @@ from datetime import datetime
 from traceback import format_exc
 import cv2
 from platform import system
+from typing import Callable
 
 from .datamodel import Camera, CameraFramePacket
 

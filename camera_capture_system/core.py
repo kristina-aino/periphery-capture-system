@@ -1,6 +1,6 @@
 from time import sleep
 from logging import getLogger
-from typing import List
+from typing import List, Callable
 from json import load
 from traceback import format_exc
 from multiprocessing import Process, Event, Queue
@@ -56,7 +56,9 @@ class CaptureSubscriber:
         logger.info(f"{self.camera.uuid} :: stopping capture subscriber process and clear queue ...")
         self.output_queue = Queue(maxsize=self.q_size)
         self.stop_event.set()
-        self.process.terminate() if terminate else self.process.join()
+        self.process.join(timeout=1)
+        if terminate:
+            self.process.terminate()
         self.process = None
         
     def _start(self):
@@ -160,10 +162,11 @@ class CapturePublisher:
         
         logger.info(f"{self.camera.uuid} :: starting capture publisher")
         
+        zmq_publisher = ZMQPublisher(self.host, self.camera.publishing_port)
+        capture = CameraInputReader(self.camera)
+        
         try:
             
-            zmq_publisher = ZMQPublisher(self.host, self.camera.publishing_port)
-            capture = CameraInputReader(self.camera)
             
             while self.stop_event is None or not self.stop_event.is_set():
                 
@@ -191,9 +194,14 @@ class CapturePublisher:
 class MultiCapturePublisher:
     """
         Publishes multiple cameras data to individual ZMQ sockets.
+        
+        ! if background is set, the calling process is responsible for calling stop() at termination !
     """
     
     def __init__(self, cameras: List[Camera], host: str = "127.0.0.1"):
+        
+        assert len(cameras) > 0, "no cameras provided"
+        
         self.capture_publishers = {cam.uuid: CapturePublisher(cam, host) for cam in cameras}
         
     def stop(self, terminate=False):
@@ -202,7 +210,7 @@ class MultiCapturePublisher:
             capture_publisher.stop_process(terminate=terminate)
         logger.info("multi cam capture publisher: stopped")
         
-    def start(self):
+    def start(self, background: bool = True):
         
         logger.info("starting multi cam capture publisher ...")
         try:
@@ -213,6 +221,9 @@ class MultiCapturePublisher:
             self.stop(terminate=True)
             raise
         logger.info("multi cam capture publisher started")
+        
+        if background:
+            return
         
         try:
             while True:

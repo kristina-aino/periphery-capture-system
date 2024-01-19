@@ -60,6 +60,15 @@ def save_video_from_queue(frame_packet_queue: Queue, video_uri: str, video_param
     finally:
         video_writer.release()
 
+def save_image_(frame_packet: CameraFramePacket, image_uri: str, image_params: ImageParameters):
+    try:
+        if image_params.output_format == "jpg":
+            cv2.imwrite(image_uri, frame_packet.camera_frame, [int(cv2.IMWRITE_JPEG_QUALITY), image_params.jpg_quality])
+        elif image_params.output_format == "png":
+            cv2.imwrite(image_uri, frame_packet.camera_frame, [int(cv2.IMWRITE_PNG_COMPRESSION), image_params.png_compression])
+    except Exception as e:
+        logger.error(f"Error while saving image: {e}")
+
 # ------------------- Functionality ------------------- #
 
 class CaptureVideoSaver(MultiCaptureSubscriber):
@@ -132,6 +141,7 @@ class CaptureVideoSaver(MultiCaptureSubscriber):
     #         multi_capture_subscriber.stop()
     #         logger.info("all save video processes stopped")
 
+
 class CaptureImageSaver(MultiCaptureSubscriber):
     
     def __init__(self, cameras: List[Camera], image_params: ImageParameters, host: str = "127.0.0.1", q_size: int = 1, num_workers: int = 8):
@@ -165,23 +175,36 @@ class CaptureImageSaver(MultiCaptureSubscriber):
             return
         
         logger.info("stopping capture image saver and await current process results ...")
-        self.pool.close()
         
         # wait for all results or terminate
         for result in self.results:
-            result.wait()
+            try:
+                logger.info(f"waiting for process {result} to finish ...")
+                result.get(timeout=1)
+            except TimeoutError:
+                logger.warn("TimeoutError while waiting for process to finish")
+            except Exception as e:
+                logger.error(f"Error while waiting for process to finish: {e}")
         
-        self.pool.terminate() if terminate else self.pool.join()
+        self.pool.close()
+        
+        for worker in self.pool._pool:
+            try:
+                logger.info(f"joining worker {worker} ...")
+                worker.join(timeout=1)
+            except TimeoutError:
+                logger.warn("TimeoutError while joining worker, terminating ...")
+                worker.terminate()
+            except Exception as e:
+                logger.error(f"Error while joining worker: {e}, terminating ...")
+                worker.terminate()
+        
+        if terminate:
+            self.pool.terminate()
         self.pool = None
         super().stop(terminate=terminate)
         
-    def save_image_(frame_packet: CameraFramePacket, image_uri: str, image_params: ImageParameters):
-        if image_params.output_format == "jpg":
-            cv2.imwrite(image_uri, frame_packet.camera_frame, [int(cv2.IMWRITE_JPEG_QUALITY), image_params.jpg_quality])
-        elif image_params.output_format == "png":
-            cv2.imwrite(image_uri, frame_packet.camera_frame, [int(cv2.IMWRITE_PNG_COMPRESSION), image_params.png_compression])
-        
-    def save_image(self, visualize: bool = False):
+    def save_image(self, visualize: bool = False) -> bool:
         
         # create datetime for image name
         image_name = datetime.now().isoformat().replace(":", "-")
@@ -190,7 +213,7 @@ class CaptureImageSaver(MultiCaptureSubscriber):
         frame_packets = self.read()
         if any([frame_packet is None for frame_packet in frame_packets]):
             logger.warn("some or all captures returned None, skipping ...")
-            return
+            return False
         
         # clean up results
         self.results = [result for result in self.results if not result.ready()]
@@ -206,7 +229,7 @@ class CaptureImageSaver(MultiCaptureSubscriber):
                 
                 logger.info(f"saving images in {image_uri} ...")
                 
-                result = self.pool.apply_async(self.save_image_, (frame_packet, image_uri, self.image_params))
+                result = self.pool.apply_async(save_image_, (frame_packet, image_uri, self.image_params))
                 self.results.append(result)
                 
                 # visualize
@@ -225,3 +248,5 @@ class CaptureImageSaver(MultiCaptureSubscriber):
             self.stop()
             cv2.destroyAllWindows()
             raise
+        
+        return True
