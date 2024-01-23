@@ -21,7 +21,7 @@ CV2_BACKENDS = {
 }
 
 class CameraInputReader:
-    def __init__(self, camera: Camera, max_consec_failures: int = 10):
+    def __init__(self, camera: Camera, max_consec_failures: int = 10, frame_transform: str = None):
         
         self.max_consec_failures = max_consec_failures
         self.camera = camera
@@ -41,6 +41,17 @@ class CameraInputReader:
         logger.info(f"{self.camera.uuid} :: fps was set to {self.capture.get(cv2.CAP_PROP_FPS)}, success: {set_fps}")
         logger.info(f"{self.camera.uuid} :: width was set to {self.capture.get(cv2.CAP_PROP_FRAME_WIDTH)}, success: {set_width}")
         logger.info(f"{self.camera.uuid} :: height was set to {self.capture.get(cv2.CAP_PROP_FRAME_HEIGHT)}, success: {set_height}")
+        
+        # define frame transform
+        if frame_transform == "ROTATE_90_CLOCKWISE":
+            self.frame_transform = lambda frame: cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+        elif frame_transform == "ROTATE_90_COUNTERCLOCKWISE":
+            self.frame_transform = lambda frame: cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
+        elif frame_transform == "ROTATE_180":
+            self.frame_transform = lambda frame: cv2.rotate(frame, cv2.ROTATE_180)
+        else:
+            self.frame_transform = lambda frame: frame
+        
         
         # initialize camera befor use
         self.initialize()
@@ -112,6 +123,7 @@ class CameraInputReader:
             
             # successfull read, reset fail counter and return
             self.fail_counter = 0
+            frame = self.frame_transform(frame)
             return frame, start_read_dt, end_read_dt
         
         except KeyboardInterrupt:

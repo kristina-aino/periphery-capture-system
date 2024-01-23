@@ -30,7 +30,15 @@ from camera_capture_system.datamodel import ImageParameters
 if __name__ == "__main__":
     cameras = load_all_cameras_from_config(ARGS.cameras_config)
 
-    mcp = MultiCapturePublisher(cameras=cameras, host=ARGS.host_name)
+    mcp = MultiCapturePublisher(
+        cameras=cameras, 
+        host=ARGS.host_name,
+        frame_transforms={
+            "cam0": "ROTATE_90_COUNTERCLOCKWISE",
+            "cam1": "ROTATE_90_CLOCKWISE",
+            "cam2": "ROTATE_90_COUNTERCLOCKWISE"
+        }
+        )
     
     cis = CaptureImageSaver(
         cameras=cameras,

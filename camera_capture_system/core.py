@@ -126,10 +126,11 @@ class CapturePublisher:
         Publishes data from a single camera to a ZMQ socket.
     """
     
-    def __init__(self, camera: Camera, host: int = "127.0.0.1"):
+    def __init__(self, camera: Camera, host: int = "127.0.0.1", frame_transform: str = None):
         
         self.camera = camera
         self.host = host
+        self.frame_transform = frame_transform
         
         # for multiprocessing
         self.stop_event = Event()
@@ -163,7 +164,7 @@ class CapturePublisher:
         logger.info(f"{self.camera.uuid} :: starting capture publisher")
         
         zmq_publisher = ZMQPublisher(self.host, self.camera.publishing_port)
-        capture = CameraInputReader(self.camera)
+        capture = CameraInputReader(self.camera, frame_transform=self.frame_transform)
         
         try:
             
@@ -198,11 +199,11 @@ class MultiCapturePublisher:
         ! if background is set, the calling process is responsible for calling stop() at termination !
     """
     
-    def __init__(self, cameras: List[Camera], host: str = "127.0.0.1"):
+    def __init__(self, cameras: List[Camera], host: str = "127.0.0.1", frame_transforms: dict[str, str] = {}):
         
         assert len(cameras) > 0, "no cameras provided"
         
-        self.capture_publishers = {cam.uuid: CapturePublisher(cam, host) for cam in cameras}
+        self.capture_publishers = {cam.uuid: CapturePublisher(cam, host, frame_transforms.get(cam.uuid, None)) for cam in cameras}
         
     def stop(self, terminate=False):
         # stop all capture publishers processes and wait for cleanup (unless terminate is set, then terminate immediately)

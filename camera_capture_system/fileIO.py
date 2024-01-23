@@ -75,11 +75,14 @@ class CaptureVideoSaver(MultiCaptureSubscriber):
     
     def __init__(self, cameras: List[Camera], video_params: VideoParameters, host: str = "127.0.0.1"):
         
+        raise NotImplementedError("CaptureVideoSaver is not implemented yet")
+        
         create_camera_save_directories(cameras=cameras, save_path=video_params.save_path)
     
         self.frames_per_video = video_params.fps * video_params.seconds
         self.save_video_processes = {}
         self.video_frame_queues = {cam.uuid: Queue() for cam in cameras}
+        
         
         
         # TODO: 
