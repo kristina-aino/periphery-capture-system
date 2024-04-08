@@ -4,9 +4,10 @@ from typing import List, Callable
 from json import load
 from traceback import format_exc
 from multiprocessing import Process, Event, Queue
+from datetime import datetime, timedelta
 import queue
 
-from .datamodel import Camera
+from .datamodel import Camera, CameraFramePacket
 from .cameraIO import CameraInputReader
 from .zmqIO import ZMQPublisher, ZMQSubscriber
 
@@ -88,9 +89,9 @@ class CaptureSubscriber:
         finally:
             zmq_subscriber.close()
             
-    def read(self):
+    def read(self, block: bool = False, timeout: float = 1):
         try:
-            return self.output_queue.get(block=False)
+            return self.output_queue.get(block=block, timeout=timeout)
         except queue.Empty:
             return None
         except:
@@ -104,22 +105,57 @@ class MultiCaptureSubscriber:
     """
     
     def __init__(self, cameras: List[Camera], q_size: int, host: str = "127.0.0.1"):
-        self.capture_subsctibers = {cam.uuid: CaptureSubscriber(cam, q_size, host) for cam in cameras}
+        self.capture_subscribers = {cam.uuid: CaptureSubscriber(cam, q_size, host) for cam in cameras}
+        
+        self.last_frames_datetime = {cam.uuid: None for cam in cameras}
         
     def stop(self, terminate : bool = True):
         # stop all capture subscribers processes and wait for cleanup
-        for capture_subscriber in self.capture_subsctibers.values():
+        for capture_subscriber in self.capture_subscribers.values():
             capture_subscriber.stop_process(terminate=terminate)
         logger.info("multi cam capture subscriber: stopped")
         
     def start(self):
         # start reading from all cameras
-        for capture_subscriber in self.capture_subsctibers.values():
+        for capture_subscriber in self.capture_subscribers.values():
             capture_subscriber.start_process()
         
-    def read(self):
-        # read from all camera subseiber threads queues, returns None if queue is empty (no blocking)
-        return [capture_subscriber.read() for capture_subscriber in self.capture_subsctibers.values()]
+    def read(self, block: bool = False, timeout: float = 1, synchronous_read: bool = False) -> List[CameraFramePacket]:
+        
+        # read from all camera subseiber
+        frame_packets = [self.capture_subscribers[k].read(block=block, timeout=timeout) for k in self.capture_subscribers]
+        
+        if any([frame_packet is None for frame_packet in frame_packets]):
+            logger.warn("some or all captures returned None ...")
+            return None
+        
+        if not synchronous_read:
+            return frame_packets
+        
+        # syncronize frames
+        # compute last frames datetime on first read
+        if any([self.last_frames_datetime[k] is None for k in self.last_frames_datetime]):
+            self.last_frames_datetime = dict(zip(self.capture_subscribers, map(lambda a: a.end_read_dt, frame_packets)))
+            return frame_packets
+        
+        # determine which queue needs to skip frames to get to the latest syncronized frame
+        for (i, k) in enumerate(self.capture_subscribers):
+            
+            condition = any([frame_packets[i].end_read_dt < self.last_frames_datetime[kk] for kk in self.capture_subscribers if kk != k])
+            
+            while condition:
+                
+                # update last frames datetime
+                self.last_frames_datetime[k] = frame_packets[i].end_read_dt
+                
+                frame_packets[i] = self.capture_subscribers[k].read(block=True, timeout=timeout)
+                condition = any([frame_packets[i].end_read_dt < self.last_frames_datetime[kk] for kk in self.capture_subscribers if kk != k])
+        
+        # update last frames datetime
+        for (i, k) in enumerate(self.capture_subscribers):
+            self.last_frames_datetime[k] = frame_packets[i].end_read_dt
+        
+        return frame_packets
 
 class CapturePublisher:
     """

@@ -30,36 +30,47 @@ def create_camera_save_directories(cameras: List[Camera], save_path: str):
             os.makedirs(save_path_)
             logger.info(f"directory {save_path_} created")
 
-def save_video_from_queue(frame_packet_queue: Queue, video_uri: str, video_params: VideoParameters):
-
+def save_videos_(frames_packets: list, video_name: str, video_params: VideoParameters):
+    
+    video_writers = []
+    
     try:
-        first_frame = frame_packet_queue.get().camera_frame
+        first_frame_packets = frames_packets[0]
         
-        video_writer = cv2.VideoWriter(
-            filename=video_uri, 
-            fourcc=cv2.VideoWriter_fourcc(*video_params.codec),
-            fps=video_params.fps,
-            frameSize=(first_frame.shape[1], first_frame.shape[0]))
-
-        logger.info(f"start saving video {video_uri} ...")
+        # extract cam uuids
+        cam_uuids = [fp.camera.uuid for fp in first_frame_packets]
+        video_uris = [os.path.join(video_params.save_path, cam_uuid, f"{video_name}.{video_params.output_format}") for cam_uuid in cam_uuids]
+        first_frames = [fp.camera_frame for fp in first_frame_packets]
+        
+        video_writers = [
+            cv2.VideoWriter(
+                filename = video_uris[i],
+                fourcc=cv2.VideoWriter_fourcc(*video_params.codec),
+                fps=video_params.fps, frameSize=(first_frames[i].shape[1], first_frames[i].shape[0])
+            ) for i in range(len(first_frame_packets))]
+        
+        
+        logger.info(f"start saving video {video_name}")
         
         # write frames to video
-        video_writer.write(first_frame)
-        for _ in range(video_params.fps * video_params.seconds):
-            frame_packet = frame_packet_queue.get()
-            video_writer.write(frame_packet.camera_frame)
+        for frame_packets in frames_packets:
+            for i in range(len(frame_packets)):
+                video_writers[i].write(frame_packets[i].camera_frame)
         
         # release video writer
-        video_writer.release()
-
-        logger.info(f"done saving video {video_uri} ...")
-
+        for vr in video_writers:
+            vr.release()
+            
+        logger.info(f"done saving video {video_name} ...")
+    
     except:
         logger.error(format_exc())
         raise
     finally:
-        video_writer.release()
-
+        for vr in video_writers:
+            if vr.isOpened():
+                vr.release()
+    
 def save_image_(frame_packet: CameraFramePacket, image_uri: str, image_params: ImageParameters):
     try:
         if image_params.output_format == "jpg":
@@ -75,84 +86,108 @@ class CaptureVideoSaver(MultiCaptureSubscriber):
     
     def __init__(self, cameras: List[Camera], video_params: VideoParameters, host: str = "127.0.0.1"):
         
-        raise NotImplementedError("CaptureVideoSaver is not implemented yet")
+        self.video_params = video_params
         
         create_camera_save_directories(cameras=cameras, save_path=video_params.save_path)
-    
+        
         self.frames_per_video = video_params.fps * video_params.seconds
-        self.save_video_processes = {}
-        self.video_frame_queues = {cam.uuid: Queue() for cam in cameras}
+        self.save_video_processes = None
         
+        super().__init__(cameras=cameras, host=host, q_size=self.frames_per_video)
         
+    def start(self):
         
-        # TODO: 
-    # def stop(self):
-    #     pass
-    # def start(self):
+        # check if already started
+        if self.save_video_processes is not None:
+            logger.warning("trying to start a process that has already started")
+            return
         
-    #     try:
+        logger.info("starting capture video saver ...")
+        self.save_video_processes = []
+        super().start()
+        
+    def stop(self, terminate: bool = True):
+        
+        # check if already stopped
+        if self.save_video_processes is None:
+            logger.warning("trying to stop a process that has already stopped")
+            return
+        
+        for process in self.save_video_processes:
+            try:
+                logger.info("trying to stop capture video saver ...")
+                process.join(timeout=1)
+            except TimeoutError:
+                logger.warn("TimeoutError while waiting for process to finish, terminating")
+                process.terminate()
+            except Exception as e:
+                logger.error(f"Error while waiting for process to finish: {e}")
+                process.terminate()
             
-    #         while True:
-
-    #             logger.info(f"reading frames ...")
-    #             collected_frames = 0
-    #             video_name = datetime.now().isoformat().replace(":", "-")
+            process.close()
+        
+        self.save_video_processes = None
+        
+        super().stop(terminate=terminate)
+        logger.info("all save video processes stopped")
+    
+    def save_video(self) -> bool:
+        
+        try:
+            
+            # clean up processes
+            self.save_video_processes = [process for process in self.save_video_processes if process.is_alive()]
+            
+            
+            logger.info(f"reading frames ...")
+            video_name = datetime.now().isoformat().replace(":", "-")
+            frames_packets = []
+            captured_frames = 0
+            
+            while captured_frames < self.frames_per_video:
                 
-    #             # collect frames until specified video length
-    #             while collected_frames < frames_per_video:
-
-    #                 # read frames from zmq
-    #                 all_frame_packets = multi_capture_subscriber.read()
-    #                 if not all(all_frame_packets):
-    #                     logger.warn("some or all frames where not read, skipping ...")
-    #                     continue
-                    
-    #                 collected_frames += 1
-    #                 for frame_packet in all_frame_packets:
-    #                     video_frame_queues[frame_packet.camera.uuid].put(frame_packet)
+                frame_packets = self.read(block=True, timeout=1, synchronous_read=True)
                 
+                if frame_packets is None:
+                    continue
                 
-    #             # after collecting enough frames, prepare processes for saving in the background
-    #             for cam in multi_capture_subscriber.cameras:
-                    
-    #                 # assign process to save video
-    #                 video_uri = os.path.join(video_params.save_path, cam.uuid, f"{video_name}.mp4")
-    #                 save_video_processes[cam.uuid] = Process(
-    #                     target=save_video_from_queue, 
-    #                     args=(
-    #                         multi_capture_subscriber.frame_packet_Q[cam.uuid],
-    #                         video_uri,
-    #                         video_params),
-    #                     daemon=True)
+                frames_packets.append(frame_packets)
+                captured_frames += 1
                 
-    #             # start processes
-    #             for uuid in save_video_processes:
-    #                 save_video_processes[uuid].start()
-
-    #     except KeyboardInterrupt:
-    #         logger.info("KeyboardInterrupt ...")
-    #     except:
-    #         logger.error(format_exc())
-    #         raise
-    #     finally:
-    #         for cam_uuid in save_video_processes:
-    #             if save_video_processes[cam_uuid].is_alive():
-    #                 save_video_processes[cam_uuid].join()
-    #                 save_video_processes[cam_uuid].close()
-    #         for cam_uuid in video_frame_queues:
-    #             video_frame_queues[cam_uuid].close()
-    #         multi_capture_subscriber.stop()
-    #         logger.info("all save video processes stopped")
-
+                q_sizes = [cs.output_queue.qsize() for cs in self.capture_subscribers.values()]
+                logger.info(f"captured frames: {captured_frames}/{self.frames_per_video} --- queue sizes: {q_sizes} --- {[dt.second for dt in self.last_frames_datetime.values()]}")
+            
+            # after collecting enough frames, prepare processes for saving in the background
+            save_video_process = Process(
+                target=save_videos_, 
+                args=(
+                    frames_packets,
+                    video_name, 
+                    self.video_params
+                ),
+                daemon=True)
+            
+            # append process reference
+            self.save_video_processes.append(save_video_process)
+            
+            # start processes
+            save_video_process.start()
+            
+        except:
+            logger.error(format_exc())
+            self.stop()
+            raise
+        
+        return True
 
 class CaptureImageSaver(MultiCaptureSubscriber):
     
-    def __init__(self, cameras: List[Camera], image_params: ImageParameters, host: str = "127.0.0.1", q_size: int = 1, num_workers: int = 8):
+    def __init__(self, cameras: List[Camera], image_params: ImageParameters, host: str = "127.0.0.1", num_workers: int = 8):
         
         create_camera_save_directories(cameras=cameras, save_path=image_params.save_path)
         
         # initialize Capture subscribers
-        super().__init__(cameras=cameras, host=host, q_size=q_size)
+        super().__init__(cameras=cameras, host=host, q_size=1)
         
         self.image_params = image_params
         
@@ -213,7 +248,7 @@ class CaptureImageSaver(MultiCaptureSubscriber):
         image_name = datetime.now().isoformat().replace(":", "-")
         
         # read frames
-        frame_packets = self.read()
+        frame_packets = self.read(block=True, timeout=1)
         if any([frame_packet is None for frame_packet in frame_packets]):
             logger.warn("some or all captures returned None, skipping ...")
             return False

@@ -21,6 +21,7 @@ class VideoParameters(BaseModel):
     fps: Annotated[StrictInt, Field(ge=15, le=120)]
     seconds: Annotated[StrictInt, Field(ge=1)] # Number of seconds in output video
     codec: Annotated[StrictStr, Field(min_length=4, max_length=4)] # Codec to use for the video
+    output_format: StrictNonEmptyStr
     
 class ImageParameters(BaseModel):
     save_path: StrictNonEmptyStr # Path to save the images under save_path/images
