@@ -63,10 +63,3 @@ pccp.start()
 
 *(if there are problems, feel free to create an issue)*
 
-
-## TODOs
-- [ ] add a mode for Multi processing camera capture (collecting and sending should still be done on main thread)
-- [ ] add a mode for Multi processing for both capture and sending
-- [ ] add an option for sending video frames over dedicated sockets insetead over one
-- [ ] upload the whl instead of manual build
-
