@@ -50,7 +50,7 @@ if __name__ == "__main__":
             "cam2": "ROTATE_90_CLOCKWISE"
         })
     
-    cis = CaptureVideoSaver(
+    cvs = CaptureVideoSaver(
         cameras=cameras,
         video_params=vp,
         host=ARGS.host_name
@@ -61,16 +61,16 @@ if __name__ == "__main__":
     try:
         
         mcp.start()
-        cis.start()
+        cvs.start()
         
         while True:
-            cis.save_video()
-            sleep(1)
+            cvs.save_video()
+            
+            # clear the queues
+            cvs.empty_queues()
         
     except KeyboardInterrupt:
         logger.info("KeyboardInterrupt ...")
+        exit(0)
     except:
         raise
-    finally:
-        mcp.stop()
-        cis.stop()

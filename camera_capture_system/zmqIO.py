@@ -18,6 +18,10 @@ class ZMQPublisher():
     
     def __init__(self, host_name: str, port: int):
         
+        self.logger_prefix = f"{self.__class__.__name__} :: {host_name}:{port} -"
+        
+        logger.info(f"{self.logger_prefix} initializing ...")
+        
         self.con_str = f"tcp://{host_name}:{port}"
         
         self.context = Context()
@@ -25,7 +29,7 @@ class ZMQPublisher():
         self.socket.setsockopt(SNDHWM, 1)
         self.socket.bind(self.con_str)
         
-        logger.info(f"{self.con_str} :: ZMQPublisher initialized")
+        logger.info(f"{self.logger_prefix} initialized !")
         
         self.last_start_read_dt = datetime.now()
         
@@ -33,29 +37,30 @@ class ZMQPublisher():
         return not self.socket.closed and not self.context.closed
         
     def close(self):
+        logger.info(f"{self.logger_prefix} :: closeing ...")
         self.socket.close()
         self.context.term()
-        logger.info(f"{self.con_str} :: ZMQPublisher stopped and unbound")
+        logger.info(f"{self.logger_prefix} :: closed !")
         
-    def prepare_packet(self, frame_packet: CameraFramePacket) -> (ndarray[uint8], dict):        
+    def prepare_packet(self, frame_packet: CameraFramePacket) -> (ndarray[uint8], dict):
         frame, data = frame_packet.dump()
         if not frame.flags["C_CONTIGUOUS"]:
             frame = ascontiguousarray(frame)
         return frame, data
         
     def publish(self, frame_packet: CameraFramePacket):
-        assert self.is_ok(), f"{self.con_str} :: ZMQPublisher is not ok"
+        assert self.is_ok(), f"{self.logger_prefix} is not ok !"
         
         frame, data = self.prepare_packet(frame_packet)
         self.socket.send_json(data, flags=SNDMORE)
         self.socket.send(frame, copy=False, track=False)
         
         # debug the published data
-        logger.debug(f"{self.con_str} :: ZMQPublisher published data: {data}")
+        logger.debug(f"{self.logger_prefix} data: {data}")
         
         # debug the record time
         dt = frame_packet.start_read_dt.timestamp() - self.last_start_read_dt.timestamp()
-        logger.debug(f"{self.con_str} :: ZMQPublisher published frame: {frame_packet.camera.uuid} :: fps: {1/(dt+1e-5)}")
+        logger.debug(f"{self.logger_prefix} frame: {frame_packet.camera.uuid} :: fps: {1/(dt+1e-5)}")
         self.last_start_read_dt = frame_packet.start_read_dt
         
     async def async_publish(self, frame_packet: CameraFramePacket):
@@ -68,6 +73,10 @@ class ZMQSubscriber():
     
     def __init__(self, host_name: str, port: int):
         
+        self.logger_prefix = f"{self.__class__.__name__} :: {host_name}:{port} -"
+        
+        logger.info(f"{self.logger_prefix} initializing ...")
+        
         self.con_str = f"tcp://{host_name}:{port}"
         
         # ZMQ setup
@@ -77,22 +86,25 @@ class ZMQSubscriber():
         self.socket.setsockopt(RCVHWM, 1)
         self.socket.connect(self.con_str)
         
-        logger.debug(f"{self.con_str} :: ZMQSubscriber connected")
+        logger.debug(f"{self.logger_prefix} :: initialized !")
         
     def is_ok(self):
         return not self.socket.closed and not self.context.closed
     
     def close(self):
+        logger.info(f"{self.logger_prefix} closing ...")
+        
         self.socket.close()
         self.context.term()
-        logger.info(f"{self.con_str} :: ZMQSubscriber stopped")
+        
+        logger.info(f"{self.logger_prefix} closed !")
     
     def recieve(self) -> CameraFramePacket:
         
-        assert self.is_ok(), f"{self.con_str} :: ZMQSubscriber is not ok"
+        assert self.is_ok(), f"{self.logger_prefix} is not ok !"
         
         if not self.socket.poll(1000):
-            logger.warning(f"{self.con_str} :: No data recieved")
+            logger.warning(f"{self.logger_prefix} no data recieved")
             return None
         
         data = self.socket.recv_json()
