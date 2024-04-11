@@ -1,3 +1,4 @@
+from numpy import argmax
 from time import sleep
 from logging import getLogger
 from typing import List, Callable
@@ -129,7 +130,7 @@ class MultiCaptureSubscriber:
         
         self.capture_subscribers = {cam.uuid: CaptureSubscriber(cam, q_size, host) for cam in cameras}
         
-        self.last_frames_datetime = {cam.uuid: None for cam in cameras}
+        self.last_frames_datetime = None
         
     def stop(self, terminate : bool = True):
         logger.info(f"{self.logger_suffix} starting ...")
@@ -155,41 +156,38 @@ class MultiCaptureSubscriber:
         # read from all camera subseiber
         frame_packets = [self.capture_subscribers[k].read(block=block, timeout=timeout) for k in self.capture_subscribers]
         
-        if any([frame_packet is None for frame_packet in frame_packets]):
-            logger.warn(f"{self.logger_suffix} some or all captures returned None ...")
-            return None
+        # return if any packets are None
+        for packet in frame_packets:
+            if packet is None:
+                return None
         
         if not synchronous_read:
             return frame_packets
         
         # syncronize frames
         # compute last frames datetime on first read
-        if any([self.last_frames_datetime[k] is None for k in self.last_frames_datetime]):
-            self.last_frames_datetime = dict(zip(self.capture_subscribers, map(lambda a: a.end_read_dt, frame_packets)))
+        if self.last_frames_datetime is None:
+            self.last_frames_datetime = [*map(lambda a: a.end_read_dt, frame_packets)]
             return frame_packets
         
-        # determine which queue needs to skip frames to get to the latest syncronized frame
-        for (i, k) in enumerate(self.capture_subscribers):
-            
-            condition = any([frame_packets[i].end_read_dt < self.last_frames_datetime[kk] for kk in self.capture_subscribers if kk != k])
-            
-            while condition:
-                
-                # update last frames datetime
-                self.last_frames_datetime[k] = frame_packets[i].end_read_dt
-                
-                frame_packets[i] = self.capture_subscribers[k].read(block=True, timeout=timeout)
-                condition = any([frame_packets[i].end_read_dt < self.last_frames_datetime[kk] for kk in self.capture_subscribers if kk != k])
+        most_recent_last_frame_dt = max(self.last_frames_datetime)
         
-        # update last frames datetime
-        for (i, k) in enumerate(self.capture_subscribers):
-            self.last_frames_datetime[k] = frame_packets[i].end_read_dt
+        for i in range(len(frame_packets)):
+            while frame_packets[i].end_read_dt < most_recent_last_frame_dt:
+                new_frame = self.capture_subscribers[frame_packets[i].camera.uuid].read(block=True, timeout=timeout)
+                
+                if new_frame is None:
+                    logger.warn(f"{self.logger_suffix} failed to read next frame")
+                    sleep(0.1)
+                
+                self.last_frames_datetime[i] = frame_packets[i].end_read_dt
+                frame_packets[i] = new_frame
         
         return frame_packets
     
     def empty_queues(self):
         
-        logger.info(f"{self.logger_suffix} emptying queues ...")
+        logger.info(f"{self.logger_suffix} emptying capture queues ...")
         
         # set empty queue event
         for capture_subscriber in self.capture_subscribers.values():

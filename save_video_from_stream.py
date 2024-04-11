@@ -66,8 +66,6 @@ if __name__ == "__main__":
         while True:
             cvs.save_video()
             
-            # clear the queues
-            cvs.empty_queues()
         
     except KeyboardInterrupt:
         logger.info("KeyboardInterrupt ...")
