@@ -2,6 +2,10 @@ import argparse
 import logging
 import argparse
 
+from camera_capture_system.core import load_all_cameras_from_config, MultiCapturePublisher
+from camera_capture_system.fileIO import CaptureImageSaver
+from camera_capture_system.datamodel import ImageParameters
+
 # ---------------------------------------------------------------------
 
 AP = argparse.ArgumentParser()
@@ -23,10 +27,6 @@ logging.basicConfig(level=ARGS.logging_level.upper())
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------
-
-from camera_capture_system.core import load_all_cameras_from_config, MultiCapturePublisher
-from camera_capture_system.fileIO import CaptureImageSaver
-from camera_capture_system.datamodel import ImageParameters
 
 if __name__ == "__main__":
     cameras = load_all_cameras_from_config(ARGS.cameras_config)

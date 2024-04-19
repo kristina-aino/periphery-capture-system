@@ -10,7 +10,7 @@ from queue import Empty as QueueEmpty
 from queue import Full as QueueFull
 
 from .datamodel import Camera, CameraFramePacket
-from .cameraIO import CameraInputReader
+from .deviceIO import CameraInputReader
 from .zmqIO import ZMQPublisher, ZMQSubscriber
 
 #----------------------------------------

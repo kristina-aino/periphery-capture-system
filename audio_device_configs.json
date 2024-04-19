@@ -1,0 +1,18 @@
+{
+    "Speakers (Realtek(R) Audio)": {
+        "id": 6,
+        "publishing_port": 11001,
+        "type": "output",
+        "channels": 2,
+        "sample_rate": 44100,
+        "frames_per_buffer": 256
+    },
+    "Logitech StreamC - Microphone": {
+        "id": 3,
+        "type": "input",
+        "publishing_port": 11002,
+        "channels": 1,
+        "sample_rate": 44100,
+        "frames_per_buffer": 256
+    }
+}

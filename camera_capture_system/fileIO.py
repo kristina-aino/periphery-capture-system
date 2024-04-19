@@ -150,7 +150,6 @@ def save_image_(frame_packet: CameraFramePacket, image_uri: str, image_params: I
         logger.error(f"{__name__} - Error while saving image: {e}")
 
 # ------------------- Functionality ------------------- #
-
 class CaptureVideoSaver(MultiCaptureSubscriber):
     
     def __init__(self, cameras: List[Camera], video_params: VideoParameters, host: str = "127.0.0.1"):

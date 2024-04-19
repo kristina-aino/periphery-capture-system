@@ -2,8 +2,9 @@ from datetime import datetime
 from zmq import SNDMORE, SUBSCRIBE, SUB, PUB, Context, SNDHWM, RCVHWM
 from numpy import ascontiguousarray, frombuffer, ndarray, uint8
 from logging import getLogger
+from typing import Union
 
-from .datamodel import CameraFramePacket
+from .datamodel import CameraFramePacket, AudioFramePacket
 
 # ------------------- Logging ------------------- #
 
@@ -13,7 +14,7 @@ logger = getLogger(__name__)
 
 class ZMQPublisher():
     """
-        Publishes CameraFramePacket to a single ZMQ socket.
+        Publishes Frame Packet to a single ZMQ socket.
     """
     
     def __init__(self, host_name: str, port: int):
@@ -42,16 +43,10 @@ class ZMQPublisher():
         self.context.term()
         logger.info(f"{self.logger_prefix} :: closed !")
         
-    def prepare_packet(self, frame_packet: CameraFramePacket) -> (ndarray[uint8], dict):
-        frame, data = frame_packet.dump()
-        if not frame.flags["C_CONTIGUOUS"]:
-            frame = ascontiguousarray(frame)
-        return frame, data
-        
-    def publish(self, frame_packet: CameraFramePacket):
+    def publish(self, packet: Union[CameraFramePacket, AudioFramePacket]):
         assert self.is_ok(), f"{self.logger_prefix} is not ok !"
         
-        frame, data = self.prepare_packet(frame_packet)
+        frame, data = packet.dump()
         self.socket.send_json(data, flags=SNDMORE)
         self.socket.send(frame, copy=False, track=False)
         
@@ -59,16 +54,16 @@ class ZMQPublisher():
         logger.debug(f"{self.logger_prefix} data: {data}")
         
         # debug the record time
-        dt = frame_packet.start_read_dt.timestamp() - self.last_start_read_dt.timestamp()
-        logger.debug(f"{self.logger_prefix} frame: {frame_packet.camera.uuid} :: fps: {1/(dt+1e-5)}")
-        self.last_start_read_dt = frame_packet.start_read_dt
+        dt = packet.start_read_dt.timestamp() - self.last_start_read_dt.timestamp()
+        logger.debug(f"{self.logger_prefix} frame: {packet.camera.uuid} :: fps: {1/(dt+1e-5)}")
+        self.last_start_read_dt = packet.start_read_dt
         
-    async def async_publish(self, frame_packet: CameraFramePacket):
-        self.publish(frame_packet)
+    async def async_publish(self, packet: CameraFramePacket):
+        self.publish(packet)
 
 class ZMQSubscriber():
     """
-        Subscribes to a single ZMQ socket to collect CameraFramePacket.
+        Subscribes to a single ZMQ socket to collect Frame Packets.
     """
     
     def __init__(self, host_name: str, port: int):
