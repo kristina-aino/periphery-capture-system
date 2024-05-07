@@ -1,4 +1,5 @@
-from abc import ABC
+from abc import ABC, abstractmethod
+from typing import Union
 from typing_extensions import Annotated
 from pydantic import BaseModel, Field, StrictStr, Strict, StrictInt
 from dataclasses import dataclass
@@ -42,95 +43,84 @@ class ImageParameters(BaseModel):
 
 @dataclass
 class FramePacket(ABC):
+    device: Union[AudioDevice, Camera]
+    frames: ndarray
+    start_read_dt: datetime
+    end_read_dt: datetime
     
-    def dump(self):
-        pass
+    # format data for sending over zero mq
+    @abstractmethod
+    def dump_zmq(self):
+        
+        # check if frame is contiguous and convert to contiguous if not
+        if not self.frames.flags["C_CONTIGUOUS"]:
+            self.frames = ascontiguousarray(self.frames)
+        
+        # get device type
+        if isinstance(self.device, AudioDevice):
+            device_type = "audio"
+        elif isinstance(self.device, Camera):
+            device_type = "camera"
+        else:
+            raise NotImplementedError("device type not implemented")
+        
+        return (
+            self.frames, 
+            {
+                "device_type": device_type,
+                "device": self.device.model_dump(),
+                "frames_data": {
+                    "dtype": str(self.frames.dtype),
+                    "shape": self.frames.shape
+                },
+                "start_read_timestamp": self.start_read_dt.timestamp(),
+                "end_read_timestamp": self.end_read_dt.timestamp()
+            }
+        )
     
+    # if data is read from zero mq
     @classmethod
-    def create(cls):
-        pass
-
+    @abstractmethod
+    def create(cls, frames: ndarray, data: dict):
+        if data["device_type"] == "audio":
+            return AudioFramePacket.create(frames, data)
+        elif data["device_type"] == "camera":
+            return CameraFramePacket.create(frames, data)
+        else:
+            raise NotImplementedError("device type not implemented")
+    
+    def __post_init__(self):
+        assert isinstance(self.device, (AudioDevice, Camera)), "device must be a valid type"
+        assert isinstance(self.frames, ndarray), "frame must be a numpy array"
+        assert isinstance(self.start_read_dt, datetime), "start read datetime must be a datetime object"
+        assert isinstance(self.end_read_dt, datetime), "end read datetime must be a datetime object"
 
 @dataclass
 class AudioFramePacket(FramePacket):
-    audio_device: AudioDevice
-    audio_frame: ndarray[int16]
-    start_read_dt: datetime
-    end_read_dt: datetime
+    device: AudioDevice
     
-    # format data for imagezmq
-    def dump(self) -> tuple[ndarray[int16], dict]:
-        
-        # check if frame is contiguous and convert to contiguous if not
-        if not frame.flags["C_CONTIGUOUS"]:
-            frame = ascontiguousarray(frame)
-        
-        return (
-            self.audio_frame,
-            {
-                "audio_device": self.audio_device.model_dump(),
-                "audio_data": {
-                    "dtype": str(self.audio_frame.dtype),
-                    "shape": self.audio_frame.shape
-                },
-                "start_read_timestamp": self.start_read_dt.timestamp(),
-                "end_read_timestamp": self.end_read_dt.timestamp()
-            }
-        )
+    def dump_zmq(self):
+        return super().dump_zmq()
     
-    # if data is from imagezmq
     @classmethod
-    def create(cls, frame: ndarray[int16], data: dict):
+    def create(cls, frames: ndarray[int16], data: dict):
         return cls(
-            camera=Camera(**data["audio_device"]),
-            audio_frame=frame,
+            device=AudioDevice(**data["device"]),
+            frames=frames,
             start_read_dt=datetime.fromtimestamp(data["start_read_timestamp"]),
             end_read_dt=datetime.fromtimestamp(data["end_read_timestamp"]))
-        
-    def __post_init__(self):
-        assert isinstance(self.audio_device, AudioDevice), "camera must be a Camera object"
-        assert isinstance(self.audio_frame, ndarray), "frame must be a numpy array"
-        assert isinstance(self.start_read_dt, datetime), "start read datetime must be a datetime object"
-        assert isinstance(self.end_read_dt, datetime), "end read datetime must be a datetime object"
 
 @dataclass
 class CameraFramePacket(FramePacket):
-    camera: Camera
-    camera_frame: ndarray[uint8]
-    start_read_dt: datetime
-    end_read_dt: datetime
+    device: Camera
     
-    # format data for imagezmq
-    def dump(self) -> tuple[ndarray[uint8], dict]:
-        
-        # check if frame is contiguous and convert to contiguous if not
-        if not frame.flags["C_CONTIGUOUS"]:
-            frame = ascontiguousarray(frame)
-        
-        return (
-            self.camera_frame, 
-            {
-                "camera": self.camera.model_dump(),
-                "image_data": {
-                    "dtype": str(self.camera_frame.dtype),
-                    "shape": self.camera_frame.shape
-                },
-                "start_read_timestamp": self.start_read_dt.timestamp(),
-                "end_read_timestamp": self.end_read_dt.timestamp()
-            }
-        )
+    def dump_zmq(self):
+        return super().dump_zmq()
     
-    # if data is from imagezmq
     @classmethod
-    def create(cls, frame: ndarray[uint8], data: dict):
+    def create(cls, frames: ndarray[uint8], data: dict):
         return cls(
-            camera=Camera(**data["camera"]),
-            camera_frame=frame,
+            device=Camera(**data["device"]),
+            frames=frames,
             start_read_dt=datetime.fromtimestamp(data["start_read_timestamp"]),
             end_read_dt=datetime.fromtimestamp(data["end_read_timestamp"]))
-        
-    def __post_init__(self):
-        assert isinstance(self.camera, Camera), "camera must be a Camera object"
-        assert isinstance(self.camera_frame, ndarray), "frame must be a numpy array"
-        assert isinstance(self.start_read_dt, datetime), "start read datetime must be a datetime object"
-        assert isinstance(self.end_read_dt, datetime), "end read datetime must be a datetime object"

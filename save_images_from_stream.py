@@ -2,7 +2,9 @@ import argparse
 import logging
 import argparse
 
-from camera_capture_system.core import load_all_cameras_from_config, MultiCapturePublisher
+from time import sleep
+
+from camera_capture_system.core import load_all_cameras_from_config, MultiInputStreamPublisher
 from camera_capture_system.fileIO import CaptureImageSaver
 from camera_capture_system.datamodel import ImageParameters
 
@@ -31,10 +33,10 @@ logger = logging.getLogger(__name__)
 if __name__ == "__main__":
     cameras = load_all_cameras_from_config(ARGS.cameras_config)
 
-    mcp = MultiCapturePublisher(
-        cameras=cameras, 
+    mcp = MultiInputStreamPublisher(
+        devices=cameras, 
         host=ARGS.host_name,
-        frame_transforms={
+        camera_frame_transforms={
             "cam0": "ROTATE_90_COUNTERCLOCKWISE",
             "cam1": "ROTATE_90_COUNTERCLOCKWISE",
             "cam2": "ROTATE_90_CLOCKWISE"
@@ -51,12 +53,9 @@ if __name__ == "__main__":
         host=ARGS.host_name
     )
     
-    from time import sleep
-    
     try:
         
         mcp.start()
-        cis.start()
         
         while True:
             

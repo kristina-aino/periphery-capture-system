@@ -11,7 +11,7 @@ from queue import Empty as QueueEmpty
 from typing import List
 
 from .datamodel import CameraFramePacket, ImageParameters, VideoParameters, Camera
-from .core import MultiCaptureSubscriber
+from .core import MultiInputStreamSubscriber
 
 # ------------------- Logging ------------------- #
 
@@ -97,7 +97,7 @@ class SaveVideoProcess(Process):
                     continue
                 
                 # extract camera frames
-                camera_frames = [fp.camera_frame for fp in frame_packets]
+                camera_frames = [fp.frames for fp in frame_packets]
                 
                 # on first frame
                 if saved_frames == 0:
@@ -143,14 +143,14 @@ class SaveVideoProcess(Process):
 def save_image_(frame_packet: CameraFramePacket, image_uri: str, image_params: ImageParameters):
     try:
         if image_params.output_format == "jpg":
-            cv2.imwrite(image_uri, frame_packet.camera_frame, [int(cv2.IMWRITE_JPEG_QUALITY), image_params.jpg_quality])
+            cv2.imwrite(image_uri, frame_packet.frames, [int(cv2.IMWRITE_JPEG_QUALITY), image_params.jpg_quality])
         elif image_params.output_format == "png":
-            cv2.imwrite(image_uri, frame_packet.camera_frame, [int(cv2.IMWRITE_PNG_COMPRESSION), image_params.png_compression])
+            cv2.imwrite(image_uri, frame_packet.frames, [int(cv2.IMWRITE_PNG_COMPRESSION), image_params.png_compression])
     except Exception as e:
         logger.error(f"{__name__} - Error while saving image: {e}")
 
 # ------------------- Functionality ------------------- #
-class CaptureVideoSaver(MultiCaptureSubscriber):
+class CaptureVideoSaver(MultiInputStreamSubscriber):
     
     def __init__(self, cameras: List[Camera], video_params: VideoParameters, host: str = "127.0.0.1"):
         self.logger_suffix = f"{self.__class__.__name__} -"
@@ -162,7 +162,7 @@ class CaptureVideoSaver(MultiCaptureSubscriber):
         self.frames_per_video = video_params.fps * video_params.seconds
         self.save_video_processes = None
         
-        super().__init__(cameras=cameras, host=host, q_size=self.frames_per_video)
+        super().__init__(devices=cameras, host=host, q_size=self.frames_per_video)
         
     def start(self):
         
@@ -236,6 +236,8 @@ class CaptureVideoSaver(MultiCaptureSubscriber):
                 
                 frame_packets = self.read(block=True, timeout=1, synchronous_read=True)
                 
+                self.logger.debug(f"collected frames: {collected_frames}/{self.frames_per_video} - packet status: {frame_packets is not None}")
+                
                 if frame_packets is None:
                     continue
                 
@@ -262,7 +264,7 @@ class CaptureVideoSaver(MultiCaptureSubscriber):
         
         return True
 
-class CaptureImageSaver(MultiCaptureSubscriber):
+class CaptureImageSaver(MultiInputStreamSubscriber):
     
     def __init__(self, cameras: List[Camera], image_params: ImageParameters, host: str = "127.0.0.1", num_workers: int = 8):
         self.logger_suffix = f"{self.__class__.__name__} -"
@@ -270,7 +272,7 @@ class CaptureImageSaver(MultiCaptureSubscriber):
         create_camera_save_directories(cameras=cameras, save_path=image_params.save_path)
         
         # initialize Capture subscribers
-        super().__init__(cameras=cameras, host=host, q_size=1)
+        super().__init__(devices=cameras, host=host, q_size=1)
         
         self.image_params = image_params
         
@@ -342,7 +344,7 @@ class CaptureImageSaver(MultiCaptureSubscriber):
         
         # read frames
         frame_packets = self.read(block=True, timeout=1)
-        if any([frame_packet is None for frame_packet in frame_packets]):
+        if frame_packets is None:
             logger.warn(f"{self.logger_suffix} some or all captures returned None, skipping ...")
             return False
         
@@ -365,7 +367,7 @@ class CaptureImageSaver(MultiCaptureSubscriber):
                 
                 # visualize
                 if visualize:
-                    cv2.imshow(frame_packet.camera.uuid, frame_packet.camera_frame)
+                    cv2.imshow(frame_packet.camera.uuid, frame_packet.frames)
                     cv2.waitKey(1)
             
             # # Check for errors

@@ -4,7 +4,7 @@ import logging
 import argparse
 from traceback import format_exc
 
-from camera_capture_system.core import load_all_cameras_from_config, MultiCaptureSubscriber
+from camera_capture_system.core import load_all_cameras_from_config, MultiInputStreamSubscriber
 
 # ---------------------------------------------------------------------
 
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 if __name__ == "__main__":
     
     cameras = load_all_cameras_from_config(ARGS.cameras_config)
-    mcs = MultiCaptureSubscriber(cameras=cameras, host=ARGS.host, q_size=1)
+    mcs = MultiInputStreamSubscriber(cameras=cameras, host=ARGS.host, q_size=1)
     
     try:
         
@@ -38,9 +38,9 @@ if __name__ == "__main__":
                 if frame_packet is None:
                     continue
                 
-                frame = frame_packet.camera_frame
+                frame = frame_packet.frames
                 
-                cv2.imshow(frame_packet.camera.uuid, frame)
+                cv2.imshow(frame_packet.device.uuid, frame)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
             

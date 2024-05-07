@@ -9,6 +9,7 @@ from logging import getLogger
 from datetime import datetime
 from traceback import format_exc
 from platform import system
+from numpy import frombuffer
 
 from .datamodel import AudioDevice, AudioFramePacket
 from .datamodel import Camera, CameraFramePacket
@@ -21,39 +22,60 @@ CV2_BACKENDS = {
     "Darwin": CAP_AVFOUNDATION
 }
 
-# ------------------- AudioIO ------------------- #
-
-class InputReader(ABC):
+class InputDevice(ABC):
     def __init__(self):
         self.logger = getLogger(__name__)
-
-    @abstractmethod
-    def start(self):
-        self.logger.debug(f"Starting ...")
-
+        
+    # @abstractmethod
+    # def start(self):
+    #     self.logger.debug(f"Starting ...")
+        
     @abstractmethod
     def stop(self):
         self.logger.debug(f"Stopping ...")
-
+        
     @abstractmethod
     def is_open(self):
         pass
-
+    
     @abstractmethod
     def initialize(self):
+        '''
+            Initialize the reader
+            and test the readability of the device
+        '''
         self.logger.debug(f"Initializing ...")
-
+        
+    @abstractmethod
+    def read_(self) -> Union[CameraFramePacket, AudioFramePacket, None]:
+        '''
+            Read a frame from the device
+        '''
+        pass
+    
     @abstractmethod
     def read(self) -> Union[AudioFramePacket, CameraFramePacket]:
+        '''
+            test the readability
+            call read_
+            test if the frame is not None (indicating a faulty read)
+            and return the raw data
+        '''
         
         assert self.is_open(), "Trying to read from a closed reader ..."
         
-        self.logger.debug(f"Reading ...")
-
+        start_read_dt = datetime.now()
+        out = self.read_()
+        end_read_dt = datetime.now()
+        
+        if out is None:
+            self.logger.warn("No valid frame read ...")
+        
+        return out, start_read_dt, end_read_dt
 
 # ------------------- OpenCV Camera Input Reader ------------------- #
 
-class CameraInputReader(InputReader):
+class CameraInputDevice(InputDevice):
     def __init__(self, camera: Camera, max_consec_failures: int = 10, frame_transform: str = None):
         
         super().__init__()
@@ -130,18 +152,16 @@ class CameraInputReader(InputReader):
         except:
             raise
         
-    def close(self):
-        super().close()
+    def stop(self):
+        super().stop()
         self.capture.release()
-        self.logger.info(f"{self.camera.uuid} :: Capture closed")
+        self.logger.info(f"{self.camera.uuid} :: Capture stoped")
         
     def read_(self):
         
         try:
             # try read frame and define camera read time
-            start_read_dt = datetime.now()
             ok, frame = self.capture.read()
-            end_read_dt = datetime.now()
             
             # count incorrect reads
             if not ok:
@@ -157,39 +177,25 @@ class CameraInputReader(InputReader):
             # successfull read, reset fail counter and return
             self.fail_counter = 0
             frame = self.frame_transform(frame)
-            return frame, start_read_dt, end_read_dt
+            return frame
         
         except KeyboardInterrupt:
             self.logger.info(f"KeyboardInterrupt ...")
-            self.close()
+            self.stop()
             raise
         except:
             self.logger.error(format_exc())
-            self.close()
+            self.stop()
             raise
         
     def read(self):
-        super().read()
-        ret = self.read_()
-        if not ret:
-            return None
-        return CameraFramePacket(
-            camera=self.camera,
-            camera_frame=ret[0],
-            start_read_dt=ret[1],
-            end_read_dt=ret[2])
-    
-    async def async_read(self):
-        ret = self.read_()
-        if not ret:
-            return None
-        return CameraFramePacket(
-            camera=self.camera,
-            camera_frame=ret[0],
-            start_read_dt=ret[1],
-            end_read_dt=ret[2])
+        frames, start_read_dt, end_read_dt = super().read()
+        return CameraFramePacket(device=self.camera, frames=frames, start_read_dt=start_read_dt, end_read_dt=end_read_dt)
 
-class AudioInputReader(InputReader):
+
+# ------------------- AudioIO ------------------- #
+
+class AudioInputDevice(InputDevice):
     def __init__(self, audio_device: AudioDevice, max_consec_failures: int = 10):
         super().__init__()
         
@@ -220,6 +226,11 @@ class AudioInputReader(InputReader):
     def initialize(self):
         super().initialize()
         
+        
+        '''
+            multiple attepmts to start a stream
+            
+        '''
         try:
             
             start_attempts = 0
@@ -250,13 +261,13 @@ class AudioInputReader(InputReader):
     def is_open(self):
         return not self.stream.is_stopped()
     
-    def start(self):
-        super().start()
-        try:
-            self.stream.start_stream()
-            self.logger.info(f"Audio stream started ...")
-        except Exception as e:
-            raise e
+    # def start(self):
+    #     super().start()
+    #     try:
+    #         self.stream.start_stream()
+    #         self.logger.info(f"Audio stream started ...")
+    #     except Exception as e:
+    #         raise e
         
     def stop(self):
         super().stop()
@@ -266,12 +277,36 @@ class AudioInputReader(InputReader):
         except Exception as e:
             raise e
         
-    def read(self):
-        super().read()
+    def read_(self):
         try:
-            audio_frames = self.stream.read(self.audio_device.frames_per_buffer)
+            # read audio frames
+            frames = frombuffer(self.stream.read(self.audio_device.frames_per_buffer), dtype="int16")
             
-            return audio_frames
-        except Exception as e:
-            raise e
+            # count incorrect reads
+            if frames is None or len(frames) == 0:
+                # log warning and increment fail counter
+                self.logger.warning(f"{self.camera.uuid} :: reader issue for {self.fail_counter}/{self.max_consec_failures} frames ...")
+                self.fail_counter += 1
+                # close and throw if too many failures
+                assert self.fail_counter < self.max_consec_failures, f"{self.camera.uuid} :: no valid frame found after {self.fail_counter} consecutive attempts"
+                
+                sleep(0.33)
+                return None
+            
+            # successfull read, reset fail counter and return
+            self.fail_counter = 0
+            return frames
+        
+        except KeyboardInterrupt:
+            self.logger.info(f"KeyboardInterrupt ...")
             self.stop()
+            raise
+        except:
+            self.logger.error(format_exc())
+            self.stop()
+            raise
+        
+    def read(self):
+        frames, start_read_dt, end_read_dt = super().read()
+        return AudioFramePacket(device=self.audio_device, frames=frames, start_read_dt=start_read_dt, end_read_dt=end_read_dt)
+        

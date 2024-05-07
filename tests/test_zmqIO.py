@@ -112,7 +112,7 @@ class TestZMQSubscriber(unittest.TestCase):
 
         mock_socket.poll.return_value = True
         mock_socket.recv_json.return_value = {
-            "image_data": {
+            "frames_data": {
                 "dtype": "uint8",
                 "shape": [2, 2]
             },
@@ -147,11 +147,11 @@ class TestZMQSubscriber(unittest.TestCase):
 
         mock_socket.poll.return_value = True
         mock_socket.recv_json.return_value = {
-            "image_data": {
+            "frames_data": {
                 "dtype": "uint8",
                 "shape": [2, 2]
             },
-            "camera": {
+            "device": {
                 "uuid": "test",
                 "id": 0,
                 "publishing_port": 5555,
