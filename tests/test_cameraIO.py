@@ -3,9 +3,9 @@ import pytest
 from unittest.mock import MagicMock, patch
 from pydantic import ValidationError
 
-from camera_capture_system.cameraIO import CameraInputReader
-from camera_capture_system.datamodel import Camera
-from camera_capture_system.datamodel import CameraFramePacket
+from periphery_capture_system.deviceIO import CameraInputReader
+from periphery_capture_system.datamodel import Camera
+from periphery_capture_system.datamodel import CameraFramePacket
 
 
 @patch('camera_capture_system.cameraIO.cv2.VideoCapture')

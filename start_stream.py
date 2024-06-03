@@ -18,7 +18,7 @@ logger = getLogger(__name__)
 # ---------------------------------------------------------------------
 
 # Setp 1: read camera configurations for all cameras
-from camera_capture_system.core import load_all_cameras_from_config, MultiCapturePublisher
+from periphery_capture_system.core import load_all_cameras_from_config, MultiCapturePublisher
 
 
 if __name__ == "__main__":

@@ -1,10 +1,10 @@
 [tool.poetry]
-name = "camera-capture-system"
+name = "periphery-capture-system"
 version = "1.0.1"
-description = "camera capture system to capture and maintain connection to multiple cameras, syncronise them and send the images over zeromq"
+description = "periphery capture system to capture and maintain connection to multiple cameras and microphone to send data over zmq"
 authors = ["kristina-aino <kristina.ai@proton.me>"]
 readme = "README.md"
-packages = [{include = "camera_capture_system"}]
+packages = [{include = "periphery_capture_system"}]
 
 [tool.poetry.dependencies]
 python = "^3.10"
