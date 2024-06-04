@@ -12,9 +12,6 @@ from numpy import ascontiguousarray
 
 StrictNonEmptyStr = Annotated[StrictStr, Field(min_length=1), Strict()]
 PortNumber = Annotated[StrictInt, Field(ge=1025, le=65535)]
-class AudioIOType(Enum):
-    INPUT = "INPUT"
-    OUTPUT = "OUTPUT"
 class VideoFormatType(Enum):
     MP4 = "MP4"
 class VideoCodecType(Enum):
@@ -26,8 +23,9 @@ class ImageFormatType(Enum):
 # ---------- BASE CLASSES ----------
 
 class PeripheryDevice(BaseModel):
-    hardware_id: StrictNonEmptyStr
+    device_id: StrictNonEmptyStr # the ffmpeg unique hardware identifer, under windows its pnp for video and cm for audio devices
     name: StrictNonEmptyStr
+    device_type: Union[StrictNonEmptyStr, None]
 
 class MediaSaveParameters(BaseModel):
     save_path: StrictNonEmptyStr # Path to save the media under save_path/media
@@ -66,19 +64,16 @@ class FramePacket(BaseModel):
             }
         }
 
-# ---------- DATA CLASSES ----------
+# ---------- DEVICE CLASSES ----------
 
 class CameraDevice(PeripheryDevice):
-    # camera_id: Annotated[StrictInt, Field(ge=0)] # index of the camera in the system (opencv index)
     width: Annotated[StrictInt, Field(ge=640, le=3840)]
     height: Annotated[StrictInt, Field(ge=480, le=2160)]
     fps: Annotated[StrictInt, Field(ge=15, le=120)]
 
 class AudioDevice(PeripheryDevice):
-    # audio_id: Annotated[StrictInt, Field(ge=0)] # index of the audio device in the system (pyaudio index)
-    # audio_type: AudioIOType
     sample_rate: Annotated[StrictInt, Field(ge=8000, le=192000)] # sample rate in Hz
-    frames_per_buffer: Annotated[StrictInt, Field(ge=1)]
+    bit_rate: Annotated[StrictInt, Field(ge=1)]
     channels: Annotated[StrictInt, Field(ge=1)]
 
 class VideoParameters(MediaSaveParameters):

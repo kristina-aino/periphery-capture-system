@@ -9,7 +9,7 @@ import periphery_capture_system.datamodel as datamodel
 @pytest.fixture
 def periphery_device():
     return datamodel.PeripheryDevice(
-        hardware_id="uuid",
+        device_id="uuid",
         name="test_device",
     )
 @pytest.fixture
@@ -18,7 +18,7 @@ def frame():
 @pytest.fixture
 def camera_device():
     return datamodel.CameraDevice(
-        hardware_id="uuid",
+        device_id="uuid",
         name="test_device",
         # camera_id=0,
         width=640,
@@ -28,7 +28,7 @@ def camera_device():
 @pytest.fixture
 def audio_device():
     return datamodel.AudioDevice(
-        hardware_id="uuid",
+        device_id="uuid",
         name="test_device",
         # audio_id=0,
         # audio_type=datamodel.AudioIOType.INPUT,

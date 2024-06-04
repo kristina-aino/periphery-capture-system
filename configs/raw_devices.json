@@ -1,0 +1,47 @@
+[
+    {
+        "device_id": "@device_pnp_\\\\?\\usb#vid_046d&pid_0893&mi_00#6&dc72295&0&0000#{65e8773d-8f56-11d0-a3b9-00a0c9223196}\\global",
+        "name": "Logitech StreamCam",
+        "device_type": "video"
+    },
+    {
+        "device_id": "@device_pnp_\\\\?\\usb#vid_1532&pid_0e05&mi_00#6&7de04d7&0&0000#{65e8773d-8f56-11d0-a3b9-00a0c9223196}\\global",
+        "name": "USB Video Device",
+        "device_type": "video"
+    },
+    {
+        "device_id": "@device_pnp_\\\\?\\usb#vid_1532&pid_0e05&mi_00#6&1a97b57c&0&0000#{65e8773d-8f56-11d0-a3b9-00a0c9223196}\\global",
+        "name": "USB Video Device",
+        "device_type": "video"
+    },
+    {
+        "device_id": "@device_pnp_\\\\?\\usb#vid_28de&pid_2400&mi_00#7&22dd252d&0&0000#{65e8773d-8f56-11d0-a3b9-00a0c9223196}\\global",
+        "name": "eTronVideo",
+        "device_type": "video"
+    },
+    {
+        "device_id": "@device_sw_{860BB310-5D01-11D0-BD3B-00A0C911CE86}\\{A3FCE0F5-3493-419F-958A-ABA1250EC20B}",
+        "name": "OBS Virtual Camera",
+        "device_type": "video"
+    },
+    {
+        "device_id": "@device_cm_{33D9A762-90C8-11D0-BD43-00A0C911CE86}\\wave_{FFF69450-F056-4A1E-BF9A-1A3EF98121F2}",
+        "name": "Digital Audio Interface (Valve VR Radio & HMD Mic)",
+        "device_type": "audio"
+    },
+    {
+        "device_id": "@device_cm_{33D9A762-90C8-11D0-BD43-00A0C911CE86}\\wave_{0F771C7A-E0B8-4EB8-8E38-08542940E824}",
+        "name": "Microphone (6- Razer Kiyo Pro)",
+        "device_type": "audio"
+    },
+    {
+        "device_id": "@device_cm_{33D9A762-90C8-11D0-BD43-00A0C911CE86}\\wave_{27C0EAC6-29F5-4B7A-8941-BF823073A9EB}",
+        "name": "Microphone (2- Logitech StreamCam)",
+        "device_type": "audio"
+    },
+    {
+        "device_id": "@device_cm_{33D9A762-90C8-11D0-BD43-00A0C911CE86}\\wave_{B4A3C0A3-66BD-4F78-B44F-3C11FE4CB3BF}",
+        "name": "Microphone (9- Razer Kiyo Pro)",
+        "device_type": "audio"
+    }
+]
