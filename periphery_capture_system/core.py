@@ -2,37 +2,118 @@ from typing import Union
 from time import sleep
 from logging import getLogger
 from typing import List
-from json import load
 from multiprocessing import Process, Event, Queue
 from queue import Empty as QueueEmpty
 from queue import Full as QueueFull
 
-from .datamodel import AudioDevice, Camera, FramePacket
+from .datamodel import FramePacket, PeripheryDevice, CameraDevice, AudioDevice
 from .deviceIO import CameraInputDevice, AudioInputDevice
-from .zmqIO import ZMQPublisher, ZMQSubscriber
+from .zmqIO import ZMQSender, ZMQReciever
 
-#----------------------------------------
-
-def load_all_cameras_from_config(config_path: str) -> List[Camera]:
-    with open(config_path, "r") as f:
-        cameras = load(f)
-    return [Camera(uuid=cam_uuid, **cameras[cam_uuid]) for cam_uuid in cameras]
-
-def load_all_audio_devices_from_config(config_path: str) -> List[AudioDevice]:
-    with open(config_path, "r") as f:
-        audio_devices = load(f)
-    return [AudioDevice(uuid=dev_uuid, **audio_devices[dev_uuid]) for dev_uuid in audio_devices]
 
 # ------------- Subscribers -------------
 
-class InputStreamSubscriber:
-    """
-        Subscribes to a ZMQ socket and returns the data.
-    """
-    
-    def __init__(self, device: Union[AudioDevice, Camera], q_size: int, host: str = "127.0.0.1"):
+class InputStreamSender:
+    def __init__(
+        self, 
+        device: PeripheryDevice,
+        host: str = "127.0.0.1", 
+        frame_transform: str = None):
         
-        self.logger = getLogger(f"{self.__class__.__name__} - {device.uuid}" )
+        self.logger = getLogger(f"{self.__class__.__name__}:{device.uuid}")
+        
+        self.device = device
+        self.host = host
+        self.frame_transform = frame_transform
+        
+        # for multiprocessing
+        self.stop_event = Event()
+        self.process = None
+        
+    def start_process(self):
+        
+        self.logger.info("starting process ...")
+        
+        if self.process is not None:
+            self.logger.warning("trying to start a process that has already started")
+            return
+        
+        self.stop_event.clear()
+        self.process = Process(target=self.run_)
+        self.process.start()
+        
+        self.logger.info("process started !")
+        
+    def stop_process(self, terminate=False):
+        
+        self.logger.info("process stopping ...")
+        
+        if self.process is None:
+            self.logger.warning("trying to stop process that has not started")
+            return
+        
+        self.stop_event.set()
+        if terminate:
+            self.process.terminate()
+        self.process.join()
+        self.process = None
+        
+        self.logger.info("process stopped !")
+        
+    def run_(self):
+        
+        self.logger.info("starting capture publisher")
+        
+        zmq_sender = ZMQSender(self.host, self.device.publishing_port)
+        
+        # create capture device depending on device type
+        if type(self.device) == CameraDevice:
+            capture = CameraInputDevice(camera=self.device, frame_transform=self.frame_transform)
+        elif type(self.device) == AudioDevice:
+            capture = AudioInputDevice(audio_device=self.device)
+        else:
+            zmq_sender.close()
+            capture.stop()
+            raise Exception("invalid device type")
+        
+        try:
+            
+            while self.stop_event is None or not self.stop_event.is_set():
+                
+                if not zmq_sender.is_ok():
+                    raise Exception("zmq publisher is not ok")
+                
+                # read frame from capture
+                frame_packet = capture.read()
+                if frame_packet is None:
+                    self.logger.warning("failed to read frame")
+                    continue
+                
+                # send frame
+                ret = zmq_sender.send(frame_packet)
+                
+                if ret is None:
+                    self.logger.warning("failed to send frame")
+                    continue
+                
+        except KeyboardInterrupt:
+            self.logger.info("KeyboardInterrupt ...")
+        except Exception as e:
+            raise e
+        finally:
+            # close zmq publisher and capture from inside the process
+            zmq_sender.close()
+            capture.stop()
+
+class InputStreamReciever:
+    
+    def __init__(
+        self, 
+        device: PeripheryDevice, 
+        q_size: int, 
+        host: str = "127.0.0.1"):
+        
+        self.logger = getLogger(f"{self.__class__.__name__}:{device.uuid}" )
         
         self.device = device
         self.host = host
@@ -53,7 +134,7 @@ class InputStreamSubscriber:
             return
         
         self.stop_event.clear()
-        process = Process(target=self._start)
+        process = Process(target=self.run_)
         process.start()
         self.process = process
         
@@ -77,7 +158,7 @@ class InputStreamSubscriber:
         
         self.logger.info("stopped !")
         
-    def _start(self, block: bool = False, timeout: float = 1):
+    def run_(self, block: bool = False, timeout: float = 1):
         
         self.logger.info("starting ...")
         
@@ -202,100 +283,6 @@ class MultiInputStreamSubscriber:
             capture_subscriber.queue_empty_event.clear()
         
         self.logger.info("queues emptied !")
-
-
-class InputStreamPublisher:
-    """
-        Publishes data from a single camera to a ZMQ socket.
-    """
-    
-    def __init__(
-        self, 
-        device: Union[AudioDevice, Camera],
-        host: int = "127.0.0.1", 
-        frame_transform: str = None):
-        
-        self.logger = getLogger(self.__class__.__name__)
-        
-        self.device = device
-        self.host = host
-        self.frame_transform = frame_transform
-        
-        # for multiprocessing
-        self.stop_event = Event()
-        self.process = None
-        
-    def start_process(self):
-        
-        self.logger.info("starting process ...")
-        
-        if self.process is not None:
-            self.logger.warning("trying to start a process that has already started")
-            return
-        
-        self.stop_event.clear()
-        process = Process(target=self._start)
-        process.start()
-        self.process = process
-        
-        self.logger.info("process started !")
-        
-    def stop_process(self, terminate=False):
-        
-        self.logger.info("process stopping ...")
-        
-        if self.process is None:
-            self.logger.warning("trying to stop process that has not started")
-            return
-        
-        self.stop_event.set()
-        if terminate:
-            self.process.terminate()
-        self.process.join()
-        self.process = None
-        
-        self.logger.info("process stopped !")
-        
-    def _start(self):
-        
-        self.logger.info("starting capture publisher")
-        
-        zmq_publisher = ZMQPublisher(self.host, self.device.publishing_port)
-        
-        # create capture device depending on device type
-        if type(self.device) == Camera:
-            capture = CameraInputDevice(camera=self.device, frame_transform=self.frame_transform)
-        elif type(self.device) == AudioDevice:
-            capture = AudioInputDevice(audio_device=self.device)
-        else:
-            self.logger.error("invalid device type")
-            zmq_publisher.close()
-            capture.stop()
-            raise Exception("invalid device type")
-        
-        try:
-            
-            while self.stop_event is None or not self.stop_event.is_set():
-                
-                assert zmq_publisher.is_ok(), f"{self.logger_suffix} zmq publisher is not ok"
-                
-                # read frame from capture
-                frame_packet = capture.read()
-                if frame_packet is None:
-                    self.logger.warning("failed to read frame")
-                    continue
-                
-                # publish frame
-                zmq_publisher.publish(frame_packet)
-                
-        except KeyboardInterrupt:
-            self.logger.info("KeyboardInterrupt ...")
-        except:
-            raise
-        finally:
-            # close zmq publisher and capture from inside the process
-            zmq_publisher.close()
-            capture.stop()
 
 
 class MultiInputStreamPublisher:

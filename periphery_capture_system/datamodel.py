@@ -1,4 +1,5 @@
 # from abc import ABC, abstractmethod
+from enum import Enum
 from typing import Union, Any
 from typing_extensions import Annotated
 from pydantic import BaseModel, field_validator, Field, StrictStr, Strict, StrictInt
@@ -11,17 +12,25 @@ from numpy import ascontiguousarray
 
 StrictNonEmptyStr = Annotated[StrictStr, Field(min_length=1), Strict()]
 PortNumber = Annotated[StrictInt, Field(ge=1025, le=65535)]
+class AudioIOType(Enum):
+    INPUT = "INPUT"
+    OUTPUT = "OUTPUT"
+class VideoFormatType(Enum):
+    MP4 = "MP4"
+class VideoCodecType(Enum):
+    MP4V = "MP4V"
+class ImageFormatType(Enum):
+    JPG = "JPG"
+    PNG = "PNG"
 
 # ---------- BASE CLASSES ----------
 
 class PeripheryDevice(BaseModel):
-    uuid: StrictNonEmptyStr
-    description: StrictNonEmptyStr
-    publishing_port: PortNumber
+    hardware_id: StrictNonEmptyStr
+    name: StrictNonEmptyStr
 
 class MediaSaveParameters(BaseModel):
     save_path: StrictNonEmptyStr # Path to save the media under save_path/media
-    output_format: StrictNonEmptyStr
 
 class FramePacket(BaseModel):
     device: PeripheryDevice
@@ -56,71 +65,29 @@ class FramePacket(BaseModel):
                 }
             }
         }
-    
-    # # if data is read from zero mq
-    # @classmethod
-    # @abstractmethod
-    # def create(cls, frames: ndarray, data: dict):
-    #     if data["device_type"] == "audio":
-    #         return AudioFramePacket.create(frames, data)
-    #     elif data["device_type"] == "camera":
-    #         return CameraFramePacket.create(frames, data)
-    #     else:
-    #         raise NotImplementedError("device type not implemented")
 
 # ---------- DATA CLASSES ----------
 
-class Camera(PeripheryDevice):
-    # uuid: StrictNonEmptyStr # unique identifier for the camera
-    id: Annotated[StrictInt, Field(ge=0)] # index of the camera in the system (opencv index)
+class CameraDevice(PeripheryDevice):
+    # camera_id: Annotated[StrictInt, Field(ge=0)] # index of the camera in the system (opencv index)
     width: Annotated[StrictInt, Field(ge=640, le=3840)]
     height: Annotated[StrictInt, Field(ge=480, le=2160)]
     fps: Annotated[StrictInt, Field(ge=15, le=120)]
-    # name: StrictNonEmptyStr
 
 class AudioDevice(PeripheryDevice):
-    # uuid: StrictNonEmptyStr # unique identifier for the audio device
-    id: Annotated[StrictInt, Field(ge=0)] # index of the audio device in the system (pyaudio index)
-    type: StrictNonEmptyStr
+    # audio_id: Annotated[StrictInt, Field(ge=0)] # index of the audio device in the system (pyaudio index)
+    # audio_type: AudioIOType
     sample_rate: Annotated[StrictInt, Field(ge=8000, le=192000)] # sample rate in Hz
     frames_per_buffer: Annotated[StrictInt, Field(ge=1)]
     channels: Annotated[StrictInt, Field(ge=1)]
 
 class VideoParameters(MediaSaveParameters):
+    video_output_format: VideoFormatType
     fps: Annotated[StrictInt, Field(ge=15, le=120)]
     seconds: Annotated[StrictInt, Field(ge=1)] # Number of seconds in output video
-    codec: Annotated[StrictStr, Field(min_length=4, max_length=4)] # Codec to use for the video
+    codec: VideoCodecType
 
 class ImageParameters(MediaSaveParameters):
+    image_output_format: ImageFormatType
     jpg_quality: Annotated[StrictInt, Field(ge=0, le=100)]
     png_compression: Annotated[StrictInt, Field(ge=0, le=100)]
-
-@dataclass
-class AudioFramePacket(FramePacket):
-    device: AudioDevice
-    
-    def dump_zmq(self):
-        return super().dump_zmq()
-    
-    @classmethod
-    def create(cls, frames: ndarray[int16], data: dict):
-        return cls(
-            device=AudioDevice(**data["device"]),
-            frames=frames,
-            start_read_dt=datetime.fromtimestamp(data["start_read_timestamp"]),
-            end_read_dt=datetime.fromtimestamp(data["end_read_timestamp"]))
-
-@dataclass
-class CameraFramePacket(FramePacket):
-    device: Camera
-    
-    def dump_zmq(self):
-        return super().dump_zmq()
-    
-    @classmethod
-    def create(cls, frames: ndarray[uint8], data: dict):
-        return cls(
-            device=Camera(**data["device"]),
-            frames=frames,
-            start_read_dt=datetime.fromtimestamp(data["start_read_timestamp"]),
-            end_read_dt=datetime.fromtimestamp(data["end_read_timestamp"]))

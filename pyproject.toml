@@ -12,6 +12,9 @@ pyzmq = "^25.1"
 opencv-python = "^4.8"
 numpy = "^1.26"
 pydantic = "^2.5"
+av = "^12.1.0"
+pywinusb = "^0.4.2"
+capture-devices = "^4.2"
 
 [tool.poetry.dev-dependencies]
 pytest = "^7.4"

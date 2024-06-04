@@ -25,9 +25,8 @@ def zmq_reciever():
 def frame_packet():
     return datamodel.FramePacket(
         device=datamodel.PeripheryDevice(
-            uuid="uuid",
-            description="description",
-            publishing_port=1025
+            hardware_id="uuid",
+            name="test_device",
         ),
         frame=np.ndarray([1, 2, 3]),
         start_read_dt=datetime.now(),

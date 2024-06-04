@@ -15,6 +15,7 @@ class ZMQSender():
         self, 
         host_name: str, 
         port: int,
+        q_qize: int = 1,
         send_wait_time_ms: int = 1000,
         response_wait_time_ms: int = 1000):
         
@@ -26,7 +27,7 @@ class ZMQSender():
         self.logger.info("initializing ...")
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.REQ)
-        self.socket.setsockopt(zmq.SNDHWM, 1)
+        self.socket.setsockopt(zmq.SNDHWM, q_qize)
         self.socket.bind(f"tcp://{host_name}:{port}")
         self.logger.info("initialized !")
     
@@ -64,14 +65,12 @@ class ZMQSender():
         return self.socket.recv()
 
 class ZMQReciever():
-    """
-        Subscribes to a single ZMQ socket to collect Packets.
-    """
     
     def __init__(
         self, 
         host_name: str, 
         port: int,
+        q_qize: int = 1,
         recieve_wait_time_ms: int = 1000):
         
         self.logger = getLogger(f"{self.__class__.__name__}@{host_name}:{port}")
@@ -81,9 +80,9 @@ class ZMQReciever():
         self.logger.info("initializing ...")
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.REP)
-        self.socket.setsockopt(zmq.RCVHWM, 1)
+        self.socket.setsockopt(zmq.RCVHWM, q_qize)
         self.socket.connect(f"tcp://{host_name}:{port}")
-        self.logger.debug("finitialized !")
+        self.logger.info("initialized !")
         
     def is_ok(self):
         return not self.socket.closed and not self.context.closed
