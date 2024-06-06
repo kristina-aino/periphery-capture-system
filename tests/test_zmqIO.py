@@ -52,3 +52,5 @@ def test_zmq_sender_send(zmq_sender, zmq_reciever, frame_packet):
     sender_thread.join()
     reciever_thread.join()
     
+    zmq_sender.close()
+    zmq_reciever.close()

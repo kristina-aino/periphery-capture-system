@@ -12,23 +12,42 @@ from numpy import ascontiguousarray
 
 StrictNonEmptyStr = Annotated[StrictStr, Field(min_length=1), Strict()]
 PortNumber = Annotated[StrictInt, Field(ge=1025, le=65535)]
-class VideoFormatType(Enum):
-    MP4 = "MP4"
-class VideoCodecType(Enum):
-    MP4V = "MP4V"
-class ImageFormatType(Enum):
-    JPG = "JPG"
-    PNG = "PNG"
 
-# ---------- BASE CLASSES ----------
+# ---------- DEVICE CLASSES ----------
 
 class PeripheryDevice(BaseModel):
     device_id: StrictNonEmptyStr # the ffmpeg unique hardware identifer, under windows its pnp for video and cm for audio devices
     name: StrictNonEmptyStr
-    device_type: Union[StrictNonEmptyStr, None]
+    device_type: Union[StrictNonEmptyStr, None] = None
 
-class MediaSaveParameters(BaseModel):
-    save_path: StrictNonEmptyStr # Path to save the media under save_path/media
+class CameraDevice(PeripheryDevice):
+    width: Annotated[StrictInt, Field(ge=640, le=3840)]
+    height: Annotated[StrictInt, Field(ge=480, le=2160)]
+    fps: Annotated[StrictInt, Field(ge=15, le=120)]
+
+class AudioDevice(PeripheryDevice):
+    channels: Annotated[StrictInt, Field(ge=1)]
+    sample_rate: Annotated[StrictInt, Field(ge=8000, le=192000)] # sample rate in Hz
+    sample_size: Annotated[StrictInt, Field(ge=8, le=32)] # sample size in bits
+    audio_buffer_size: Annotated[StrictInt, Field(ge=100)] # size of audio buffer in ms
+
+# ---------- MEDIA CLASSES ----------
+
+class MediaFile(BaseModel):
+    file_path: StrictNonEmptyStr
+    file_name: StrictNonEmptyStr
+    file_extension: StrictNonEmptyStr
+
+class VideoFile(MediaFile):
+    fps: Annotated[StrictInt, Field(ge=15, le=120)]
+    seconds: Annotated[StrictInt, Field(ge=1)] # Number of seconds in output video
+    codec: StrictNonEmptyStr
+
+class ImageFile(MediaFile):
+    jpg_quality: Annotated[StrictInt, Field(ge=0, le=100)]
+    png_compression: Annotated[StrictInt, Field(ge=0, le=100)]
+
+# ---------- BASE CLASSES ----------
 
 class FramePacket(BaseModel):
     device: PeripheryDevice
@@ -63,26 +82,3 @@ class FramePacket(BaseModel):
                 }
             }
         }
-
-# ---------- DEVICE CLASSES ----------
-
-class CameraDevice(PeripheryDevice):
-    width: Annotated[StrictInt, Field(ge=640, le=3840)]
-    height: Annotated[StrictInt, Field(ge=480, le=2160)]
-    fps: Annotated[StrictInt, Field(ge=15, le=120)]
-
-class AudioDevice(PeripheryDevice):
-    sample_rate: Annotated[StrictInt, Field(ge=8000, le=192000)] # sample rate in Hz
-    bit_rate: Annotated[StrictInt, Field(ge=1)]
-    channels: Annotated[StrictInt, Field(ge=1)]
-
-class VideoParameters(MediaSaveParameters):
-    video_output_format: VideoFormatType
-    fps: Annotated[StrictInt, Field(ge=15, le=120)]
-    seconds: Annotated[StrictInt, Field(ge=1)] # Number of seconds in output video
-    codec: VideoCodecType
-
-class ImageParameters(MediaSaveParameters):
-    image_output_format: ImageFormatType
-    jpg_quality: Annotated[StrictInt, Field(ge=0, le=100)]
-    png_compression: Annotated[StrictInt, Field(ge=0, le=100)]

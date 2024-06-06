@@ -11,32 +11,58 @@ def periphery_device():
     return datamodel.PeripheryDevice(
         device_id="uuid",
         name="test_device",
+        device_type=None
     )
+
 @pytest.fixture
 def frame():
     return np.ndarray([1, 2, 3])
+
 @pytest.fixture
-def camera_device():
-    return datamodel.CameraDevice(
-        device_id="uuid",
-        name="test_device",
-        # camera_id=0,
+def media_file():
+    return datamodel.MediaFile(
+        file_path="path",
+        file_name="name",
+        file_extension="ext"
+    )
+
+# ---------- DEVICE CLASSES ----------
+
+def test_camera_device(periphery_device):
+    datamodel.CameraDevice(
+        **periphery_device.model_dump(),
         width=640,
         height=480,
         fps=30
     )
-@pytest.fixture
-def audio_device():
-    return datamodel.AudioDevice(
-        device_id="uuid",
-        name="test_device",
-        # audio_id=0,
-        # audio_type=datamodel.AudioIOType.INPUT,
+
+def test_audio_device(periphery_device):
+    datamodel.AudioDevice(
+        **periphery_device.model_dump(),
         sample_rate=44100,
-        frames_per_buffer=1024,
-        channels=1
+        channels=1,
+        sample_size=16,
+        audio_buffer_size=100
     )
 
+# ---------- MEDIA CLASSES ----------
+
+def test_video_file(media_file):
+    datamodel.VideoFile(
+        **media_file.model_dump(),
+        fps=30,
+        seconds=10,
+        codec="mp4v"
+    )
+
+def test_image_file(media_file):
+    datamodel.ImageFile(
+        **media_file.model_dump(),
+        jpg_quality=100,
+        png_compression=0
+    )
+
+# ---------- FRAME PACKET ----------
 
 def test_frame_packet_initialization(periphery_device, frame):
     datamodel.FramePacket(
@@ -73,24 +99,3 @@ def test_frame_packet_dump(periphery_device, frame):
     # check if data is correct
     assert (fram_packet_dump["frame"] == frame).all()
 
-
-def test_device_initialization(periphery_device, camera_device, audio_device):
-    camera_device
-    audio_device
-
-def test_video_parameters_initialization():
-    datamodel.VideoParameters(
-        save_path="path",
-        video_output_format=datamodel.VideoFormatType.MP4,
-        fps=30,
-        seconds=10,
-        codec=datamodel.VideoCodecType.MP4V
-    )
-
-def image_parameters_initialization():
-    datamodel.ImageParameters(
-        save_path="path",
-        image_output_format=datamodel.ImageFormatType.JPG,
-        jpg_quality=100,
-        png_compression=0
-    )

@@ -6,51 +6,62 @@ import subprocess
 # from capture_devices import devices
 from json import dump as json_dump
 from json import load as json_load
-from typing import Union, Tuple, List
+from typing import List
 from abc import ABC, abstractmethod
 from logging import getLogger
-from time import sleep
 from logging import getLogger
 from datetime import datetime
 from traceback import format_exc
-from platform import system
-from numpy import frombuffer
 
 from .datamodel import FramePacket
-from .datamodel import PeripheryDevice, CameraDevice
+from .datamodel import PeripheryDevice, CameraDevice, AudioDevice
 
 # ------------------- DEVICE UTILS ------------------- #
 
-def get_all_devices_ffmpeg():
+def get_all_devices_ffmpeg(os: str = "windows"):
     """
         - load all devices from ffmpeg stdout
         - remove prefixes and suffixes
+        - concat pnp and cm id's, names and types
     """
+    
+    if os != "windows":
+        raise NotImplementedError("Only windows (dshow) is supported for now ...")
     
     # Get list of input devices
     devices = subprocess.run(["ffmpeg", "-sources", "dshow"], capture_output=True, text=True).stdout
     
-    names = [a[1:-1] for a in re.findall("\[.*\]", devices)]
-    device_ids = [f"@{a[1:-2]}" for a in re.findall("\@.*\[", devices)]
-    device_type =[a[3:-1] for a in re.findall("\].*\(.*.\)", devices)]
+    names = [a[1:-1] for a in re.findall(r"\[.*\]", devices)]
+    device_ids = [f"@{a[1:-2]}" for a in re.findall(r"\@.*\[", devices)]
+    device_types = [a[3:-1] for a in re.findall(r"\].*\(.*.\)", devices)]
     
-    return [PeripheryDevice(
-        device_id=device_id,
-        name=name,
-        device_type=device_type
-    ) for name, device_id, device_type in zip(names, device_ids, device_type)]
+    return [PeripheryDevice(device_id=device_id, name=name, device_type=device_type) for name, device_id, device_type in zip(names, device_ids, device_types)]
 
 def save_periphery_devices_to_config(devices: List[PeripheryDevice], config_file: str = "./raw_devices.json"):
     with open(config_file, "w") as f:
         json_dump([device.model_dump() for device in devices], f)
 
-def load_all_periphery_devices_from_config(config_file: str = "./configs/raw_devices.json") -> List[PeripheryDevice]:
+def load_all_devices_from_config(device_type: str, config_file: str = "./configs/devices.json") -> List[PeripheryDevice]:
     with open(config_file, "r") as f:
-        return [CameraDevice(**device) for device in json_load(f)]
+        devices = json_load(f)
+    
+    video_devices = [device for device in devices if device["device_type"] == "video"]
+    audio_devices = [device for device in devices if device["device_type"] == "audio"]
+    
+    if device_type == "video":
+        return [CameraDevice(**device) for device in video_devices]
+    elif device_type == "audio":
+        return [AudioDevice(**device) for device in audio_devices]
+    else:
+        raise ValueError("device_type must be either 'video' or 'audio' ...")
 
-def load_all_camera_devices_from_config(config_file: str = "./configs/cameras_device_configs.json") -> List[CameraDevice]:
-    with open(config_file, "r") as f:
-        return [CameraDevice(**device) for device in json_load(f)]
+# def load_all_camera_devices_from_config(config_file: str = "./configs/cameras_device_configs.json") -> List[CameraDevice]:
+#     with open(config_file, "r") as f:
+#         return [CameraDevice(**device) for device in json_load(f)]
+
+# def load_all_audio_devices_from_config(config_file: str = "./configs/audio_device_configs.json") -> List[AudioDevice]:
+#     with open(config_file, "r") as f:
+#         return [AudioDevice(**device) for device in json_load(f)]
 
 # ------------------- BASE CLASS ------------------- #
 
@@ -58,12 +69,14 @@ class FFMPEGReader(ABC):
     def __init__(self, device: PeripheryDevice, logger_name: str):
         self.logger = getLogger(logger_name)
         
+        assert isinstance(device, PeripheryDevice), f"device must be an instance of PeripheryDevice, not {type(device)} ..."
+        
         self.device = device
         self.container = None
         self.stream = None
     
     def is_activ(self):
-        return self.container is not None or self.stream is not None
+        return self.container is not None
     
     def stop(self):
         self.logger.info("Stopping reader ...")
@@ -71,67 +84,26 @@ class FFMPEGReader(ABC):
         if self.container is not None:
             self.container.close()
             self.container = None
-            self.stream = None
+        self.stream = None
         self.is_active = False
         
         self.logger.info("Reader stopped!")
     
     @abstractmethod
-    def start(self):
+    def start(self, file_string: str, options: dict, format: str = "dshow"):
         
         self.logger.info(f"Starting reader ...")
         
         if self.is_activ():
             self.logger.warning(f"Trying to start a reader that has already been started, stopping and restarting ...")
             self.stop()
-    
-    @abstractmethod
-    def read(self, timeout: float = 1):
-        
-        with concurrent_futures.ThreadPoolExecutor(max_workers=1) as executor:
-            
-            future = executor.submit(next, self.container.decode(self.stream))
-            
-            try:
-                frame = future.result(timeout)
-                return frame.to_ndarray()
-            
-            except concurrent_futures.TimeoutError:
-                self.logger.warning("Timeout while reading frame ...")
-                return None
-            
-            except StopIteration:
-                self.logger.warning("No frame found ...")
-                return None
-            
-            except Exception as e:
-                self.logger.error(format_exc())
-                self.stop()
-                raise e
-
-
-# ------------------- FFMPEG READERS ------------------- #
-
-class CameraDeviceReader(FFMPEGReader):
-    def __init__(self, camera: CameraDevice):
-        
-        super().__init__(
-            device=camera,
-            logger_name=f"{__class__.__name__}@{camera.device_id}")
-        
-    def start(self):
-        
-        super().start()
         
         try:
             # set container
             self.container = av.open(
-                file=f'video={self.device.device_id}', 
+                file=file_string, 
                 format='dshow',
-                options={
-                    'video_size': f'{self.device.width}x{self.device.height}', 
-                    'framerate': f'{self.device.fps}'
-                })
+                options=options)
             
             # set video stream
             self.stream = self.container.streams.video[0]
@@ -140,32 +112,75 @@ class CameraDeviceReader(FFMPEGReader):
             self.stop()
             raise e
     
-    def read(self, timeout: int = 1):
+    @abstractmethod
+    def read(self, timeout: float = 1):
         
         start_read_dt = datetime.now()
-        ret = super().read(timeout=timeout)
+        
+        with concurrent_futures.ThreadPoolExecutor(max_workers=1) as executor:
+            
+            future = executor.submit(next, self.container.decode(self.stream))
+            
+            try:
+                frame = future.result(timeout)
+            
+            except concurrent_futures.TimeoutError:
+                self.logger.warning("Timeout while reading frame ...")
+                frame = None
+            
+            except StopIteration:
+                self.logger.warning("No frame found ...")
+                frame = None
+            
+            except Exception as e:
+                self.logger.error(format_exc())
+                self.stop()
+                raise e
+        
         end_read_dt = datetime.now()
         
-        if ret is None:
+        if frame is None:
             return None
         
         return FramePacket(
             device=self.device,
-            frame=ret,
+            frame=frame.to_ndarray(),
             start_read_dt=start_read_dt,
             end_read_dt=end_read_dt
         )
 
+# ------------------- FFMPEG READERS ------------------- #
 
-def start_audio_ffmpeg_container(device_id: str, sample_rate: int = 44100, channels: int = 2, bit_rate: int = 16):
-    return av.open(
-        file=f'audio={device_id}', 
-        format='dshow',
-        options={
-            'sample_rate': f'{sample_rate}',
-            'bit_rate': f'{bit_rate}',
-            'channels': f'{channels}'
-        })
+class CameraDeviceReader(FFMPEGReader):
+    def __init__(self, camera: CameraDevice):
+        super().__init__(device=camera, logger_name=f"{__class__.__name__}@{camera.device_id}")
+        
+    def start(self):
+        super().start(
+            file_string=f'video={self.device.device_id}',
+            options={
+                    'video_size': f'{self.device.width}x{self.device.height}', 
+                    'framerate': f'{self.device.fps}'
+                },
+            format='dshow'
+        )
+
+class AudioDeviceReader(FFMPEGReader):
+    def __init__(self, audio_device: AudioDevice):
+        super().__init__(device=audio_device, logger_name=f"{__class__.__name__}@{audio_device.name}")
+        
+    def start(self):
+        super().start(
+            file_string=f'audio={self.device.device_id}', 
+            options={
+                'sample_rate': f'{self.device.sample_rate}',
+                'channels': f'{self.device.channels}',
+                'sample_size': f'{self.device.sample_size}',
+                'audio_buffer_size': f'{self.device.audio_buffer_size}'
+            },
+            format='dshow',
+        )
+
 
 # class CameraDeviceReader(DeviceReader):
 #     def __init__(
