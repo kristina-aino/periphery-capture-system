@@ -55,14 +55,6 @@ def load_all_devices_from_config(device_type: str, config_file: str = "./configs
     else:
         raise ValueError("device_type must be either 'video' or 'audio' ...")
 
-# def load_all_camera_devices_from_config(config_file: str = "./configs/cameras_device_configs.json") -> List[CameraDevice]:
-#     with open(config_file, "r") as f:
-#         return [CameraDevice(**device) for device in json_load(f)]
-
-# def load_all_audio_devices_from_config(config_file: str = "./configs/audio_device_configs.json") -> List[AudioDevice]:
-#     with open(config_file, "r") as f:
-#         return [AudioDevice(**device) for device in json_load(f)]
-
 # ------------------- BASE CLASS ------------------- #
 
 class FFMPEGReader(ABC):
@@ -92,7 +84,7 @@ class FFMPEGReader(ABC):
     @abstractmethod
     def start(self, file_string: str, options: dict, format: str = "dshow"):
         
-        self.logger.info(f"Starting reader ...")
+        self.logger.info(f"Starting ...")
         
         if self.is_activ():
             self.logger.warning(f"Trying to start a reader that has already been started, stopping and restarting ...")
@@ -100,10 +92,7 @@ class FFMPEGReader(ABC):
         
         try:
             # set container
-            self.container = av.open(
-                file=file_string, 
-                format='dshow',
-                options=options)
+            self.container = av.open(file=file_string, format='dshow', options=options)
             
             # set video stream
             self.stream = self.container.streams.video[0]
@@ -111,8 +100,9 @@ class FFMPEGReader(ABC):
         except Exception as e:
             self.stop()
             raise e
+        
+        self.logger.info(f"started !")
     
-    @abstractmethod
     def read(self, timeout: float = 1):
         
         start_read_dt = datetime.now()
@@ -153,15 +143,15 @@ class FFMPEGReader(ABC):
 
 class CameraDeviceReader(FFMPEGReader):
     def __init__(self, camera: CameraDevice):
-        super().__init__(device=camera, logger_name=f"{__class__.__name__}@{camera.device_id}")
+        super().__init__(device=camera, logger_name=f"{__class__.__name__}@{camera.name}")
         
     def start(self):
         super().start(
             file_string=f'video={self.device.device_id}',
             options={
-                    'video_size': f'{self.device.width}x{self.device.height}', 
-                    'framerate': f'{self.device.fps}'
-                },
+                'video_size': f'{self.device.width}x{self.device.height}', 
+                'framerate': f'{self.device.fps}'
+            },
             format='dshow'
         )
 

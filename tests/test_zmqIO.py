@@ -11,16 +11,10 @@ import periphery_capture_system.datamodel as datamodel
 
 @pytest.fixture
 def zmq_sender():
-    return zmqIO.ZMQSender(
-        host_name="127.0.0.1",
-        port=1025,
-    )
+    return zmqIO.ZMQSender(host="127.0.0.1", port=1025)
 @pytest.fixture
 def zmq_reciever():
-    return zmqIO.ZMQReciever(
-        host_name="127.0.0.1",
-        port=1025,
-    )
+    return zmqIO.ZMQReciever(host="127.0.0.1", port=1025)
 @pytest.fixture
 def frame_packet():
     return datamodel.FramePacket(
@@ -33,14 +27,22 @@ def frame_packet():
         end_read_dt=datetime.now()
     )
 
-def test_zmq_close(zmq_sender, zmq_reciever):
-    zmq_sender.close()
-    zmq_reciever.close()
-    
-    assert not zmq_sender.is_ok()
-    assert not zmq_reciever.is_ok()
+def test_zmq_sender_open_close(zmq_sender):
+    zmq_sender.start()
+    assert zmq_sender.is_active()
+    zmq_sender.stop()
+    assert not zmq_sender.is_active()
+
+def test_zmq_reciever_open_close(zmq_reciever):
+    zmq_reciever.start()
+    assert zmq_reciever.is_active()
+    zmq_reciever.stop()
+    assert not zmq_reciever.is_active()
 
 def test_zmq_sender_send(zmq_sender, zmq_reciever, frame_packet):
+    
+    zmq_sender.start()
+    zmq_reciever.start()
     
     sender_thread = Thread(target=zmq_sender.send, args=(frame_packet,))
     reciever_thread = Thread(target=zmq_reciever.recieve)
@@ -52,5 +54,5 @@ def test_zmq_sender_send(zmq_sender, zmq_reciever, frame_packet):
     sender_thread.join()
     reciever_thread.join()
     
-    zmq_sender.close()
-    zmq_reciever.close()
+    zmq_sender.stop()
+    zmq_reciever.stop()
