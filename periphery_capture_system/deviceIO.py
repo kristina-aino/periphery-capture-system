@@ -71,7 +71,7 @@ class FFMPEGReader(ABC):
         return self.container is not None
     
     def stop(self):
-        self.logger.info("Stopping reader ...")
+        self.logger.info("Stopping ...")
         
         if self.container is not None:
             self.container.close()
@@ -79,7 +79,7 @@ class FFMPEGReader(ABC):
         self.stream = None
         self.is_active = False
         
-        self.logger.info("Reader stopped!")
+        self.logger.info("stopped!")
     
     @abstractmethod
     def start(self, file_string: str, options: dict, format: str = "dshow"):
@@ -112,6 +112,12 @@ class FFMPEGReader(ABC):
             
             try:
                 frame = future.result(timeout)
+                
+                if frame is None:
+                    return None
+                
+                if isinstance(frame, av.VideoFrame):
+                    frame = frame.reformat(format='rgb24')
             
             except concurrent_futures.TimeoutError:
                 self.logger.warning("Timeout while reading frame ...")
@@ -127,9 +133,6 @@ class FFMPEGReader(ABC):
                 raise e
         
         end_read_dt = datetime.now()
-        
-        if frame is None:
-            return None
         
         return FramePacket(
             device=self.device,
@@ -149,7 +152,9 @@ class CameraDeviceReader(FFMPEGReader):
             file_string=f'video={self.device.device_id}',
             options={
                 'video_size': f'{self.device.width}x{self.device.height}', 
-                'framerate': f'{self.device.fps}'
+                'framerate': f'{self.device.fps}/1',
+                # 'pixel_format': f'{self.device.pixel_format}',
+                # 'vcodec': f'{self.device.vcodec}'
             },
             format='dshow'
         )

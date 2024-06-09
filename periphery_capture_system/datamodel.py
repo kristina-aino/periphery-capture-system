@@ -2,7 +2,7 @@
 from enum import Enum
 from typing import Union, Any
 from typing_extensions import Annotated
-from pydantic import BaseModel, field_validator, Field, StrictStr, Strict, StrictInt
+from pydantic import BaseModel, field_validator, Field, StrictStr, Strict, StrictInt, StrictFloat
 from dataclasses import dataclass
 from numpy import ndarray, uint8, int16
 from datetime import datetime
@@ -23,7 +23,9 @@ class PeripheryDevice(BaseModel):
 class CameraDevice(PeripheryDevice):
     width: Annotated[StrictInt, Field(ge=640, le=3840)]
     height: Annotated[StrictInt, Field(ge=480, le=2160)]
-    fps: Annotated[StrictInt, Field(ge=15, le=120)]
+    fps: Annotated[StrictFloat, Field(ge=15, le=120)]
+    # pixel_format: StrictNonEmptyStr
+    # vcodec: StrictNonEmptyStr
 
 class AudioDevice(PeripheryDevice):
     channels: Annotated[StrictInt, Field(ge=1)]
@@ -39,8 +41,8 @@ class MediaFile(BaseModel):
     file_extension: StrictNonEmptyStr
 
 class VideoFile(MediaFile):
-    fps: Annotated[StrictInt, Field(ge=15, le=120)]
-    seconds: Annotated[StrictInt, Field(ge=1)] # Number of seconds in output video
+    fps: Annotated[StrictFloat, Field(ge=15, le=120)]
+    seconds: Annotated[StrictFloat, Field(ge=1)] # Number of seconds in output video
     codec: StrictNonEmptyStr
 
 class ImageFile(MediaFile):
