@@ -1,29 +1,28 @@
-from typing import Union
+import time
+
+from typing import List
 from time import sleep
 from logging import getLogger
-from typing import List
-from multiprocessing import Process, Event, Manager
+from concurrent.futures import ThreadPoolExecutor
+from multiprocessing import Process, Event
 from multiprocessing import TimeoutError as ProcessTimeoutError
-from queue import Empty as QueueEmpty
-from queue import Full as QueueFull
 
 from .datamodel import FramePacket, PeripheryDevice, CameraDevice, AudioDevice, PortNumber
 from .deviceIO import FFMPEGReader, CameraDeviceReader, AudioDeviceReader
-from .zmqIO import ZMQSender, ZMQReciever
+from .zmqIO import ZMQSender, ZMQReceiver
 
-
-# ------------- Subscribers -------------
+# ------------- SINGLE STREAM CLASSES -------------
 
 class InputStreamSender:
-    def __init__(self, device_reader: FFMPEGReader, zmq_sender: ZMQSender, invalid_frame_timeout: float = 1, failed_frame_send_timeout: float = 1):
-        self.logger = getLogger(f"{self.__class__.__name__}")
+    def __init__(self, device: PeripheryDevice, port: int, host: str = "127.0.0.1", invalid_frame_timeout: float = 1.):
+        self.logger = getLogger(f"{self.__class__.__name__}:{device.name}")
         
-        self.device_reader = device_reader
-        self.zmq_sender = zmq_sender
+        self.device = device
+        self.host = host
+        self.port = port
         
         # timeouts
         self.invalid_frame_timeout = invalid_frame_timeout
-        self.failed_frame_send_timeout = failed_frame_send_timeout
         
         # for multiprocessing
         self.stop_event = Event()
@@ -35,9 +34,7 @@ class InputStreamSender:
         
         self.logger.info("starting ...")
         
-        if self.is_active():
-            self.logger.warning("trying to start a process that has already started, restarting ...")
-            self.stop_process()
+        assert not self.is_active(), "trying to start a process that has already started, restarting ..."
         
         self.stop_event.clear()
         self.process = Process(target=self.run_)
@@ -65,135 +62,114 @@ class InputStreamSender:
         
     def run_(self):
         
+        # crteate device reader and zmq sender
+        zmq_sender = ZMQSender(host=self.host, port=self.port)
+        if isinstance(self.device, CameraDevice):
+            device_reader = CameraDeviceReader(self.device)
+        elif isinstance(self.device, AudioDevice):
+            device_reader = AudioDeviceReader(self.device)
+        else:
+            raise ValueError("device type not supported")
+        
         try:
-            
-            self.zmq_sender.start()
-            self.device_reader.start()
+            zmq_sender.start()
+            device_reader.start()
             
             while not self.stop_event.is_set():
                 
+                dt = time.perf_counter()
+                
                 # read frame
-                frame_packet = self.device_reader.read()
+                frame_packet = device_reader.read()
                 if frame_packet is None:
                     sleep(self.invalid_frame_timeout)
                     continue
                 
                 # send frame
-                ret = self.zmq_sender.send(frame_packet)
-                if ret is None:
-                    sleep(self.failed_frame_send_timeout)
-                    continue
-        
+                zmq_sender.send(frame_packet)
+                
+                
+                send_time = (time.perf_counter() - dt)
+                if send_time > 0:
+                    self.logger.debug(f"frame read and sent with fps {1 / send_time}")
+                
         except Exception as e:
             raise e
         finally:
-            self.zmq_sender.stop()
-            self.device_reader.stop()
+            zmq_sender.stop()
+            device_reader.stop()
 
-class InputStreamReciever:
+class InputStreamReceiver:
     
-    def __init__(self, zmq_reciever: ZMQReciever, read_write_timeout: int = 1, failed_frame_recieve_timeout: int = 1):
+    def __init__(self, port: int, host: str = "127.0.0.1"):
         self.logger = getLogger(f"{self.__class__.__name__}" )
-        
-        self.zmq_reciever = zmq_reciever
-        
-        # timeouts
-        self.failed_frame_recieve_timeout = failed_frame_recieve_timeout
-        self.read_write_timeout = read_write_timeout
-        
-        # for multiprocessing
-        self.stop_event = Event()
-        self.process = None
-        self.io_manager = Manager()
-        # todo add multiprocessing transfere from run_ to read
+        self.zmq_receiver = ZMQReceiver(host=host, port=port)
     
-    def is_active(self): return self.process is not None
-    
-    def start_process(self):
-        
+    def start(self):
         self.logger.info("starting ...")
-        
-        if self.is_active():
-            self.logger.warning("trying to start a process that has already started, restarting ...")
-            self.stop_process()
-        
-        self.stop_event.clear()
-        self.process = Process(target=self.run_)
-        self.process.start()
-        
+        self.zmq_receiver.start()
         self.logger.info("started !")
         
-    def stop_process(self, timeout: int = 1):
-        
+    def stop(self):
         self.logger.info("stopping ...")
-        
-        self.stop_event.set()
-        
-        if self.process is None: return
-        
-        try:
-            self.process.join(timeout=timeout)
-        except ProcessTimeoutError:
-            self.logger.warning("process join timeout, terminating ...")
-            self.process.terminate()
-        
-        self.process = None
-        
+        self.zmq_receiver.stop()
         self.logger.info("stopped !")
         
-    def run_(self):
-        
+    def read(self):
         try:
-            
-            self.zmq_reciever.start()
-            
-            while not self.stop_event.is_set():
-                
-                # read frame
-                frame_packet = self.zmq_reciever.recieve()
-                
-                with self.io_condition:
-                    self.active_frame_packet = frame_packet
-                    self.io_condition.notify()
-                
+            frame_packet = self.zmq_receiver.receive()
         except Exception as e:
+            self.stop()
             raise e
-        finally:
-            self.zmq_reciever.stop()
+        
+        return frame_packet
+
+# ------------- MULTI STREAM CLASSES -------------
+
+class MultiInputStreamSender:
+    
+    def __init__(self, devices: List[PeripheryDevice], ports: List[int], host: str = "127.0.0.1"):
+        self.logger = getLogger(self.__class__.__name__)
+        
+        assert len(devices) == len(ports), "number of devices and ports must be equal"
+        
+        self.input_sender = [InputStreamSender(device, port, host) for device, port in zip(devices, ports)]
+        
+        self.logger.info(f"multi input stream sender with {len(self.input_sender)} senders")
+        
+    def stop_processes(self, timeout: float = 1):
+        for sub in self.input_sender:
+            sub.stop_process(timeout=timeout)
+        
+    def start_processes(self):
+        for sub in self.input_sender:
+            sub.start_process()
+
+class MultiInputStreamReceiver:
+    
+    def __init__(self, ports: List[int], host: str = "127.0.0.1"):
+        self.logger = getLogger(self.__class__.__name__)
+        self.capture_reciever = [InputStreamReceiver(port, host) for port in ports]
+        
+        self.executor = ThreadPoolExecutor(max_workers=len(self.capture_reciever))
+        
+        self.logger.info(f"multi input stream reciever with {len(self.capture_reciever)} recievers")
+        
+    def start(self):
+        for rec in self.capture_reciever:
+            rec.start()
+        
+    def stop(self):
+        for rec in self.capture_reciever:
+            rec.stop()
         
     def read(self):
-        with self.io_condition:
-            if not self.io_condition.wait(timeout=self.read_write_timeout):
-                self.logger.warning("read timeout")
-                return None
-            return self.active_frame_packet
+        futures = [self.executor.submit(rec.read) for rec in self.capture_reciever]
+        frames = [future.result() for future in futures]
+        if any([frame is None for frame in frames]):
+            return None
+        return frames
 
-
-# class MultiInputStreamSubscriber:
-    
-#     def __init__(self, devices: List[Union[Camera, AudioDevice]], q_size: int, host: str = "127.0.0.1"):
-#         self.logger = getLogger(self.__class__.__name__)
-#         self.capture_subscribers = {device.uuid: InputStreamSubscriber(device, q_size, host) for device in devices}
-#         self.last_frames_datetime = None
-        
-#     def stop(self, terminate : bool = True):
-#         self.logger.info("starting ...")
-        
-#         # stop all capture subscribers processes and wait for cleanup
-#         for capture_subscriber in self.capture_subscribers.values():
-#             capture_subscriber.stop_process(terminate=terminate)
-        
-#         self.logger.info("stopped !")
-        
-#     def start(self):
-#         self.logger.info("starting ...")
-        
-#         # start reading from all cameras
-#         for capture_subscriber in self.capture_subscribers.values():
-#             capture_subscriber.start_process()
-        
-#         self.logger.info("started !")
-        
 #     def read(self, block: bool = False, timeout: float = 1, synchronous_read: bool = False) -> Union[List[FramePacket], None]:
         
 #         # read from all camera subseiber
@@ -251,69 +227,3 @@ class InputStreamReciever:
 #             capture_subscriber.queue_empty_event.clear()
         
 #         self.logger.info("queues emptied !")
-
-
-# class MultiInputStreamPublisher:
-#     """
-#         Publishes multiple input streams to individual ZMQ sockets.
-        
-#         ! if background is set, the calling process is responsible for calling stop() at termination !
-#     """
-    
-#     def __init__(
-#             self, 
-#             devices: List[Union[AudioDevice, Camera]], 
-#             host: str = "127.0.0.1", 
-#             camera_frame_transforms: dict[str, str] = {} # for camera input readers
-#         ):
-        
-#         self.logger = getLogger(self.__class__.__name__)
-#         assert len(devices) > 0, "no cameras provided"
-#         self.capture_publishers = {device.uuid: InputStreamPublisher(device, host, camera_frame_transforms.get(device.uuid, None)) for device in devices}
-        
-#     def stop(self, terminate=False):
-#         # stop all capture publishers processes and wait for cleanup (unless terminate is set, then terminate immediately)
-#         self.logger.info("stopping ...")
-        
-#         for capture_publisher in self.capture_publishers.values():
-#             capture_publisher.stop_process(terminate=terminate)
-            
-#         self.logger.info("stopped !")
-        
-#     def start(self, background: bool = True):
-        
-#         self.logger.info("starting ...")
-        
-#         try:
-#             # start all capture publishers processes
-#             for capture_publisher in self.capture_publishers.values():
-#                 capture_publisher.start_process()
-#         except:
-#             self.stop(terminate=True)
-#             raise
-#         self.logger.info("started !")
-        
-#         if background:
-#             return
-        
-#         try:
-#             while True:
-                
-#                 # check if any of the processes have stopped and restart if desired
-#                 for capture_publisher in self.capture_publishers.values():
-                    
-#                     if capture_publisher.process is None:
-#                         raise Exception("has not started")
-                    
-#                     if not capture_publisher.process.is_alive():
-#                         # TODO: self.restart(k)
-#                         raise Exception("has stopped")
-                
-#                 sleep(0.5)
-                
-#         except KeyboardInterrupt:
-#             self.logger.info("KeyboardInterrupt ...")
-#         except:
-#             raise
-#         finally:
-#             self.stop()

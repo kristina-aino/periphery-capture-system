@@ -67,7 +67,7 @@ class FFMPEGReader(ABC):
         self.container = None
         self.stream = None
     
-    def is_activ(self):
+    def is_active(self):
         return self.container is not None
     
     def stop(self):
@@ -86,24 +86,23 @@ class FFMPEGReader(ABC):
         
         self.logger.info(f"Starting ...")
         
-        if self.is_activ():
+        if self.is_active():
             self.logger.warning(f"Trying to start a reader that has already been started, stopping and restarting ...")
             self.stop()
         
-        try:
-            # set container
-            self.container = av.open(file=file_string, format='dshow', options=options)
-            
-            # set video stream
-            self.stream = self.container.streams.video[0]
+        # set container
+        self.container = av.open(file=file_string, format='dshow', options=options)
         
-        except Exception as e:
-            self.stop()
-            raise e
+        # set video stream
+        self.stream = self.container.streams.video[0]
         
         self.logger.info(f"started !")
     
     def read(self, timeout: float = 1):
+        
+        if not self.is_active():
+            self.logger.warning("Trying to read from a reader that is not active ...")
+            return None
         
         start_read_dt = datetime.now()
         
