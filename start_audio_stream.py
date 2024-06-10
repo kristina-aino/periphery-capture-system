@@ -4,8 +4,8 @@ import argparse
 
 from json import load
 
-from periphery_capture_system.datamodel import AudioDevice
-from periphery_capture_system.core import MultiInputStreamPublisher
+from device_capture_system.datamodel import AudioDevice
+from device_capture_system.core import MultiInputStreamPublisher
 
 # ---------------------------------------------------------------------
 

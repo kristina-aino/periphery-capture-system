@@ -1,7 +1,7 @@
 import argparse
 import sys
 
-from periphery_capture_system.deviceIO import get_all_devices_ffmpeg, save_periphery_devices_to_config
+from device_capture_system.deviceIO import get_all_devices_ffmpeg, save_periphery_devices_to_config
 
 if __name__ == "__main__":
 

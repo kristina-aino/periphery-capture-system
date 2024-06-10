@@ -4,7 +4,7 @@ import logging
 import argparse
 from traceback import format_exc
 
-from periphery_capture_system.core import load_all_cameras_from_config, MultiInputStreamSubscriber
+from device_capture_system.core import load_all_cameras_from_config, MultiInputStreamSubscriber
 
 # ---------------------------------------------------------------------
 

@@ -4,9 +4,9 @@ import argparse
 
 from time import sleep
 
-from periphery_capture_system.core import load_all_cameras_from_config, MultiInputStreamPublisher
-from periphery_capture_system.fileIO import CaptureImageSaver
-from periphery_capture_system.datamodel import ImageParameters
+from device_capture_system.core import load_all_cameras_from_config, MultiInputStreamPublisher
+from device_capture_system.fileIO import CaptureImageSaver
+from device_capture_system.datamodel import ImageParameters
 
 # ---------------------------------------------------------------------
 

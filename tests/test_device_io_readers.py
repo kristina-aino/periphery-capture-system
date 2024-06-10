@@ -7,8 +7,8 @@ from unittest.mock import MagicMock, patch
 from pydantic import ValidationError
 from datetime import datetime
 
-from periphery_capture_system import deviceIO
-from periphery_capture_system import datamodel
+from device_capture_system import deviceIO
+from device_capture_system import datamodel
 
 
 @pytest.fixture
@@ -35,7 +35,7 @@ def test_stop(ffmpeg_reader):
     assert ffmpeg_reader.container is None
     assert ffmpeg_reader.stream is None
 
-@patch('periphery_capture_system.deviceIO.av.open')
+@patch('device_capture_system.deviceIO.av.open')
 def test_start(mock_av_open, ffmpeg_reader):
     ffmpeg_reader.start('file_string', {'option': 'value'})
     mock_av_open.assert_called_once_with(file='file_string', format='dshow', options={'option': 'value'})

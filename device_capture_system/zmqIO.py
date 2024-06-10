@@ -8,7 +8,7 @@ from datetime import datetime
 from numpy import frombuffer
 from logging import getLogger
 
-from periphery_capture_system import datamodel
+from device_capture_system import datamodel
 
 
 

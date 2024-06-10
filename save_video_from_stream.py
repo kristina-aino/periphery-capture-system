@@ -2,9 +2,9 @@ import argparse
 import logging
 import argparse
 
-from periphery_capture_system.core import load_all_cameras_from_config, MultiInputStreamPublisher
-from periphery_capture_system.fileIO import CaptureVideoSaver
-from periphery_capture_system.datamodel import VideoParameters
+from device_capture_system.core import load_all_cameras_from_config, MultiInputStreamPublisher
+from device_capture_system.fileIO import CaptureVideoSaver
+from device_capture_system.datamodel import VideoParameters
 
 # ---------------------------------------------------------------------
 

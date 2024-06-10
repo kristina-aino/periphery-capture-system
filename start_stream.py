@@ -22,9 +22,9 @@ logger = getLogger(__name__)
 # ---------------------------------------------------------------------
 
 # Setp 1: read camera configurations for all cameras
-from periphery_capture_system.core import MultiInputStreamSender, InputStreamReceiver
-from periphery_capture_system.deviceIO import load_all_devices_from_config
-from periphery_capture_system.zmqIO import ZMQProxy
+from device_capture_system.core import MultiInputStreamSender, InputStreamReceiver
+from device_capture_system.deviceIO import load_all_devices_from_config
+from device_capture_system.zmqIO import ZMQProxy
 
 
 if __name__ == "__main__":

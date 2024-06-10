@@ -3,7 +3,7 @@ from pydantic import ValidationError
 from datetime import datetime
 import numpy as np
 
-import periphery_capture_system.datamodel as datamodel
+import device_capture_system.datamodel as datamodel
 
 
 @pytest.fixture

@@ -5,7 +5,7 @@ import numpy as np
 from pydantic import ValidationError
 from datetime import datetime
 
-from periphery_capture_system import deviceIO
+from device_capture_system import deviceIO
 
 
 def test_get_all_devices_ffmpeg():

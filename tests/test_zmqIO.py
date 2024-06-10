@@ -6,8 +6,8 @@ from pydantic import ValidationError
 from datetime import datetime
 from threading import Thread
 
-import periphery_capture_system.zmqIO as zmqIO
-import periphery_capture_system.datamodel as datamodel
+import device_capture_system.zmqIO as zmqIO
+import device_capture_system.datamodel as datamodel
 
 @pytest.fixture
 def zmq_sender():

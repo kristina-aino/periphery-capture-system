@@ -4,7 +4,7 @@ version = "1.0.1"
 description = "periphery capture system to capture and maintain connection to multiple cameras and microphone to send data over zmq"
 authors = ["kristina-aino <kristina.ai@proton.me>"]
 readme = "README.md"
-packages = [{include = "periphery_capture_system"}]
+packages = [{include = "device_capture_system"}]
 
 [tool.poetry.dependencies]
 python = "^3.10"
