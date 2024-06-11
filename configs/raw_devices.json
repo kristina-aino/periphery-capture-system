@@ -15,18 +15,13 @@
         "device_type": "video"
     },
     {
-        "device_id": "@device_pnp_\\\\?\\usb#vid_28de&pid_2400&mi_00#7&22dd252d&0&0000#{65e8773d-8f56-11d0-a3b9-00a0c9223196}\\global",
-        "name": "eTronVideo",
-        "device_type": "video"
-    },
-    {
         "device_id": "@device_sw_{860BB310-5D01-11D0-BD3B-00A0C911CE86}\\{A3FCE0F5-3493-419F-958A-ABA1250EC20B}",
         "name": "OBS Virtual Camera",
         "device_type": "video"
     },
     {
-        "device_id": "@device_cm_{33D9A762-90C8-11D0-BD43-00A0C911CE86}\\wave_{FFF69450-F056-4A1E-BF9A-1A3EF98121F2}",
-        "name": "Digital Audio Interface (Valve VR Radio & HMD Mic)",
+        "device_id": "@device_cm_{33D9A762-90C8-11D0-BD43-00A0C911CE86}\\wave_{BA043884-E5A5-4D31-BA09-A26EEBB846D1}",
+        "name": "Microphone (Arctis 7+)",
         "device_type": "audio"
     },
     {

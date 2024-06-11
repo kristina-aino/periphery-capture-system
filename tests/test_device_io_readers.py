@@ -19,13 +19,13 @@ def ffmpeg_reader():
         def read(self):
             return super().read()
     
-    device = datamodel.PeripheryDevice(device_id="device1", name="Device 1")
+    device = datamodel.PeripheryDevice(device_id="device1", name="Device 1", device_type="video")
     return MockFFMPEGReader(device, 'test_logger')
 
-def test_is_activ(ffmpeg_reader):
-    assert not ffmpeg_reader.is_activ()
+def test_is_active(ffmpeg_reader):
+    assert not ffmpeg_reader.is_active()
     ffmpeg_reader.container = MagicMock()
-    assert ffmpeg_reader.is_activ()
+    assert ffmpeg_reader.is_active()
 
 
 def test_stop(ffmpeg_reader):
@@ -37,8 +37,10 @@ def test_stop(ffmpeg_reader):
 
 @patch('device_capture_system.deviceIO.av.open')
 def test_start(mock_av_open, ffmpeg_reader):
+    
     ffmpeg_reader.start('file_string', {'option': 'value'})
     mock_av_open.assert_called_once_with(file='file_string', format='dshow', options={'option': 'value'})
+    
     assert ffmpeg_reader.container is not None
     assert ffmpeg_reader.stream is not None
 

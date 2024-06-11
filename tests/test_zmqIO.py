@@ -14,7 +14,7 @@ def zmq_sender():
     return zmqIO.ZMQSender(host="127.0.0.1", port=1025)
 @pytest.fixture
 def zmq_receiver():
-    return zmqIO.ZMQreceiver(host="127.0.0.1", port=1025)
+    return zmqIO.ZMQReceiver(host="127.0.0.1", port=1025)
 @pytest.fixture
 def frame_packet():
     return datamodel.FramePacket(
@@ -45,7 +45,7 @@ def test_zmq_sender_send(zmq_sender, zmq_receiver, frame_packet):
     zmq_receiver.start()
     
     sender_thread = Thread(target=zmq_sender.send, args=(frame_packet,))
-    receiver_thread = Thread(target=zmq_receiver.recieve)
+    receiver_thread = Thread(target=zmq_receiver.receive)
     
     receiver_thread.start()
     sleep(0.1)

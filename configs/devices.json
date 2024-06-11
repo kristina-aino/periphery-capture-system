@@ -23,40 +23,14 @@
     "height": 1080,
     "fps": 30
   },
+  
   {
-    "device_id": "@device_cm_{33D9A762-90C8-11D0-BD43-00A0C911CE86}\\wave_{FFF69450-F056-4A1E-BF9A-1A3EF98121F2}",
-    "name": "Digital Audio Interface (Valve VR Radio & HMD Mic)",
+    "device_id": "@device_cm_{33D9A762-90C8-11D0-BD43-00A0C911CE86}\\wave_{BA043884-E5A5-4D31-BA09-A26EEBB846D1}",
+    "name": "Microphone (Arctis 7+)",
     "device_type": "audio",
     "channels": 1,
-    "sample_rate": 16000,
+    "sample_rate": 88200,
     "sample_size": 16,
-    "audio_buffer_size": 100
-  },
-  {
-      "device_id": "@device_cm_{33D9A762-90C8-11D0-BD43-00A0C911CE86}\\wave_{0F771C7A-E0B8-4EB8-8E38-08542940E824}",
-      "name": "Microphone (6- Razer Kiyo Pro)",
-      "device_type": "audio",
-      "channels": 1,
-      "sample_rate": 16000,
-      "sample_size": 16,
-      "audio_buffer_size": 100
-  },
-  {
-      "device_id": "@device_cm_{33D9A762-90C8-11D0-BD43-00A0C911CE86}\\wave_{27C0EAC6-29F5-4B7A-8941-BF823073A9EB}",
-      "name": "Microphone (2- Logitech StreamCam)",
-      "device_type": "audio",
-      "channels": 1,
-      "sample_rate": 16000,
-      "sample_size": 16,
-      "audio_buffer_size": 100
-  },
-  {
-      "device_id": "@device_cm_{33D9A762-90C8-11D0-BD43-00A0C911CE86}\\wave_{B4A3C0A3-66BD-4F78-B44F-3C11FE4CB3BF}",
-      "name": "Microphone (9- Razer Kiyo Pro)",
-      "device_type": "audio",
-      "channels": 1,
-      "sample_rate": 16000,
-      "sample_size": 16,
-      "audio_buffer_size": 100
+    "audio_buffer_size": 20
   }
 ]

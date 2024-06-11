@@ -1,7 +1,10 @@
 import cv2
 import time
 import argparse
+import matplotlib.pyplot as plt
+import numpy as np
 
+from progress.bar import Bar
 from logging import getLogger, basicConfig
 from traceback import format_exc
 
@@ -28,23 +31,25 @@ from device_capture_system.deviceIO import load_all_devices_from_config
 
 if __name__ == "__main__":
     
-    cameras = load_all_devices_from_config("video", config_file=ARGS.config)
+    microphones = load_all_devices_from_config("audio", config_file=ARGS.config)
     
-    for cam in cameras:
-        print(cam)
+    for mic in microphones:
+        print(mic)
     
     multi_sender = MultiInputStreamSender(
-        devices = cameras,
+        devices = microphones,
         proxy_sub_port=ARGS.proxy_sub_port,
         proxy_pub_port=ARGS.proxy_pub_port,
         host = ARGS.host
     )
     
     receiver = InputStreamReceiver(
-        devices = cameras,
+        devices = microphones,
         proxy_pub_port = ARGS.proxy_pub_port,
         host = ARGS.host
     )
+    
+    mag_bar = Bar("Mag", max=180)
     
     try:
         
@@ -53,21 +58,26 @@ if __name__ == "__main__":
         
         time_taken = 0
         collected_frames = 0
-        while collected_frames < 180:
+        frames_to_collect = 180
+        while collected_frames < frames_to_collect:
             dt = time.time()
+            
             frames = receiver.read()
+            
             if frames is None:
                 continue
+            
             time_taken += time.time() - dt
             collected_frames += 1
             
             for k in frames:
-                cv2.imshow(k, frames[k].frame)
-                if cv2.waitKey(1) & 0xFF == ord('q'):
-                    break
+                frame = frames[k].frame.squeeze()
+                
+                mean_abs = np.abs(frame).mean()
+                mag_bar.goto(int(mean_abs))
             
             print(f"collected {collected_frames} frames")
-        print(f"fps: {180 / time_taken}")
+        print(f"fps: {frames_to_collect / time_taken}")
         
         
     except Exception as e:
@@ -75,4 +85,4 @@ if __name__ == "__main__":
     finally:
         multi_sender.stop_processes()
         receiver.stop()
-        cv2.destroyAllWindows()
+        mag_bar.finish()

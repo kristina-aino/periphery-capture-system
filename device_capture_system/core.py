@@ -1,25 +1,27 @@
 import time
+import numpy as np
 
-from typing import List
+from typing import List, Callable
 from time import sleep
 from logging import getLogger
 from concurrent.futures import ThreadPoolExecutor
 from multiprocessing import Process, Event
 from multiprocessing import TimeoutError as ProcessTimeoutError
 
-from .datamodel import PeripheryDevice, CameraDevice, AudioDevice
+from .datamodel import PeripheryDevice, CameraDevice, AudioDevice, FramePreprocessing
 from .deviceIO import CameraDeviceReader, AudioDeviceReader
 from .zmqIO import ZMQSender, ZMQReceiver, ZMQProxy
 
 # ------------- SINGLE STREAM CLASSES -------------
 
 class InputStreamSender:
-    def __init__(self, device: PeripheryDevice, proxy_sub_port: int, host: str = "127.0.0.1", invalid_frame_timeout: float = 1.):
+    def __init__(self, device: PeripheryDevice, proxy_sub_port: int, host: str = "127.0.0.1", frame_preprocessing: FramePreprocessing = None, invalid_frame_timeout: float = 1.):
         self.logger = getLogger(f"{self.__class__.__name__}:{device.name}")
         
         self.device = device
         self.host = host
         self.proxy_port = proxy_sub_port
+        self.frame_preprocessing = frame_preprocessing
         
         # timeouts
         self.invalid_frame_timeout = invalid_frame_timeout
@@ -54,8 +56,10 @@ class InputStreamSender:
         
     def _run(self):
         
-        # crteate device reader and zmq sender
+        # crteate zmq sender
         zmq_sender = ZMQSender(host=self.host, port=self.proxy_port)
+        
+        # create device reader
         if isinstance(self.device, CameraDevice):
             device_reader = CameraDeviceReader(self.device)
         elif isinstance(self.device, AudioDevice):
@@ -63,6 +67,17 @@ class InputStreamSender:
         else:
             raise ValueError("device type not supported")
         
+        # set frame preprocessing
+        if self.frame_preprocessing == FramePreprocessing.ROTATE_180:
+            preprocess = lambda frame: np.rot90(frame, 2)
+        elif self.frame_preprocessing == FramePreprocessing.ROTATE_90_CLOCKWISE:
+            preprocess = lambda frame: np.rot90(frame, 1)
+        elif self.frame_preprocessing == FramePreprocessing.ROTATE_90_COUNTERCLOCKWISE:
+            preprocess = lambda frame: np.rot90(frame, 3)
+        else:
+            preprocess = lambda frame: frame
+        
+        # start continuous read frame -> preprocess -> send frame
         try:
             zmq_sender.start()
             device_reader.start()
@@ -77,9 +92,11 @@ class InputStreamSender:
                     sleep(self.invalid_frame_timeout)
                     continue
                 
+                # preprocess frame
+                frame_packet.frame = preprocess(frame_packet.frame)
+                
                 # send frame
                 zmq_sender.send(frame_packet)
-                
                 
                 send_time = (time.perf_counter() - dt)
                 if send_time > 0:
@@ -130,10 +147,16 @@ class InputStreamReceiver:
 
 class MultiInputStreamSender:
     
-    def __init__(self, devices: List[PeripheryDevice], proxy_sub_port: int, proxy_pub_port: int, host: str = "127.0.0.1"):
+    def __init__(self, devices: List[PeripheryDevice], proxy_sub_port: int, proxy_pub_port: int, host: str = "127.0.0.1", frame_preprocessings: List[FramePreprocessing] = [], invalid_frame_timeout: float = 1.):
         self.logger = getLogger(self.__class__.__name__)
         
-        self.input_sender = [InputStreamSender(device, proxy_sub_port, host) for device in devices]
+        frame_preprocessings = [*frame_preprocessings, *[None] * (len(devices) - len(frame_preprocessings))]
+        
+        self.input_sender = [InputStreamSender(
+            device = device, 
+            proxy_sub_port = proxy_sub_port, 
+            host = host,
+            frame_preprocessing = frame_preprop) for (device, frame_preprop) in zip(devices, frame_preprocessings)]
         self.zmq_proxy = ZMQProxy(host, sub_port=proxy_sub_port, pub_port=proxy_pub_port)
         
         self.logger.info(f"multi input stream sender with {len(self.input_sender)} senders")

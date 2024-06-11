@@ -93,8 +93,15 @@ class FFMPEGReader(ABC):
         # set container
         self.container = av.open(file=file_string, format='dshow', options=options)
         
-        # set video stream
-        self.stream = self.container.streams.video[0]
+        self.logger.debug(f"Open Container with options: {options}")
+        
+        # set stream (audio or video)
+        if self.device.device_type == "audio":
+            self.stream = self.container.streams.audio[0]
+        elif self.device.device_type == "video":
+            self.stream = self.container.streams.video[0]
+        else:
+            raise Exception("No audio or video stream found ...")
         
         self.logger.info(f"started !")
     
@@ -121,11 +128,11 @@ class FFMPEGReader(ABC):
             
             except concurrent_futures.TimeoutError:
                 self.logger.warning("Timeout while reading frame ...")
-                frame = None
+                return None
             
             except StopIteration:
                 self.logger.warning("No frame found ...")
-                frame = None
+                return None
             
             except Exception as e:
                 self.logger.error(format_exc())
@@ -167,7 +174,7 @@ class AudioDeviceReader(FFMPEGReader):
         super().start(
             file_string=f'audio={self.device.device_id}', 
             options={
-                'sample_rate': f'{self.device.sample_rate}',
+                'ar': f'{self.device.sample_rate}',
                 'channels': f'{self.device.channels}',
                 'sample_size': f'{self.device.sample_size}',
                 'audio_buffer_size': f'{self.device.audio_buffer_size}'

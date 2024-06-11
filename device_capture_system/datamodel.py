@@ -12,6 +12,10 @@ from numpy import ascontiguousarray
 
 StrictNonEmptyStr = Annotated[StrictStr, Field(min_length=1), Strict()]
 PortNumber = Annotated[StrictInt, Field(ge=1025, le=65535)]
+class FramePreprocessing(Enum):
+    ROTATE_90_CLOCKWISE = "rotate_90_clockwise"
+    ROTATE_90_COUNTERCLOCKWISE = "rotate_90_counterclockwise"
+    ROTATE_180 = "rotate_180"
 
 # ---------- DEVICE CLASSES ----------
 
@@ -31,7 +35,7 @@ class AudioDevice(PeripheryDevice):
     channels: Annotated[StrictInt, Field(ge=1)]
     sample_rate: Annotated[StrictInt, Field(ge=8000, le=192000)] # sample rate in Hz
     sample_size: Annotated[StrictInt, Field(ge=8, le=32)] # sample size in bits
-    audio_buffer_size: Annotated[StrictInt, Field(ge=100)] # size of audio buffer in ms
+    audio_buffer_size: Annotated[StrictInt, Field(ge=1)] # size of audio buffer in ms
 
 # ---------- MEDIA CLASSES ----------
 
