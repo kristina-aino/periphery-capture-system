@@ -1,3 +1,4 @@
+import cv2
 import time
 import argparse
 
@@ -24,8 +25,6 @@ logger = getLogger(__name__)
 # Setp 1: read camera configurations for all cameras
 from device_capture_system.core import MultiInputStreamSender, InputStreamReceiver
 from device_capture_system.deviceIO import load_all_devices_from_config
-from device_capture_system.zmqIO import ZMQProxy
-
 
 if __name__ == "__main__":
     
@@ -35,40 +34,45 @@ if __name__ == "__main__":
         print(cam)
     
     multi_sender = MultiInputStreamSender(
-        devices = cameras, 
-        proxy_sub_port=ARGS.proxy_sub_port, 
+        devices = cameras,
+        proxy_sub_port=ARGS.proxy_sub_port,
+        proxy_pub_port=ARGS.proxy_pub_port,
         host = ARGS.host
     )
     
-    proxy = ZMQProxy(ARGS.host, ARGS.proxy_pub_port, ARGS.proxy_sub_port)
-    
     receiver = InputStreamReceiver(
-        proxy_pub_port=ARGS.proxy_pub_port,
+        devices = cameras,
+        proxy_pub_port = ARGS.proxy_pub_port,
         host = ARGS.host
     )
     
     try:
         
-        proxy.start_process()
         multi_sender.start_processes()
         receiver.start()
         
         time_taken = 0
         collected_frames = 0
-        while collected_frames < 180 * 10:
+        while collected_frames < 180:
             dt = time.time()
-            frame = receiver.read()
-            if frame is None:
+            frames = receiver.read()
+            if frames is None:
                 continue
             time_taken += time.time() - dt
             collected_frames += 1
+            
+            for k in frames:
+                cv2.imshow(k, frames[k].frame)
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+            
             print(f"collected {collected_frames} frames")
-        print(f"fps: {180 * 10 / time_taken}")
+        print(f"fps: {180 / time_taken}")
         
         
     except Exception as e:
         raise e
     finally:
         multi_sender.stop_processes()
-        proxy.stop_process()
         receiver.stop()
+        cv2.destroyAllWindows()

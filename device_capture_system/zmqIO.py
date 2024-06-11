@@ -13,13 +13,12 @@ from device_capture_system import datamodel
 
 
 class ZMQProxy():
-    def __init__(self, host: str, sender_port: int, receiver_port: int):
-        self.logger = getLogger(f"{self.__class__.__name__}@{host}:{sender_port}->{receiver_port}")
+    def __init__(self, host: str, sub_port: int, pub_port: int):
+        self.logger = getLogger(f"{self.__class__.__name__}@{host}:{sub_port}->{pub_port}")
+        
         self.host = host
-        
-        self.sender_port = sender_port
-        self.receiver_port = receiver_port
-        
+        self.sub_port = sub_port
+        self.pub_port = pub_port
         self.process = None
         
     def is_active(self):
@@ -28,7 +27,8 @@ class ZMQProxy():
     def start_process(self):
         self.logger.info("starting ...")
         
-        assert not self.is_active(),  "trying to start proxy that has already started, restarting ..."
+        assert not self.is_active(), "trying to start proxy that has already started, restarting ..."
+        
         parent_pipe, child_pipe = Pipe()
         self.process = Process(target=self._run, args=(child_pipe,))
         self.process.start()
@@ -53,13 +53,13 @@ class ZMQProxy():
     def _run(self, pipe):
         
         context = zmq.Context()
-        xsub_socket = context.socket(zmq.XPUB)
-        xpub_socket = context.socket(zmq.XSUB)
+        xsub_socket = context.socket(zmq.XSUB)
+        xpub_socket = context.socket(zmq.XPUB)
         
         try:
-            xsub_socket.bind(f"tcp://{self.host}:{self.sender_port}")
+            xsub_socket.bind(f"tcp://{self.host}:{self.sub_port}")
             
-            xpub_socket.bind(f"tcp://{self.host}:{self.receiver_port}")
+            xpub_socket.bind(f"tcp://{self.host}:{self.pub_port}")
             
             zmq.proxy(xsub_socket, xpub_socket)
             pipe.send(None) # signal to parent that the proxy has stopped
@@ -69,8 +69,6 @@ class ZMQProxy():
             xsub_socket.close()
             xpub_socket.close()
             context.term()
-            
-
 
 class ZMQSender():
     
@@ -91,9 +89,7 @@ class ZMQSender():
     def start(self):
         self.logger.info("starting ...")
         
-        if self.is_active():
-            self.logger.warning("sender is already started, restarting ...")
-            self.stop()
+        assert not self.is_active(), "trying to start a sender that has already started"
         
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.PUB)
@@ -151,9 +147,7 @@ class ZMQReceiver():
     def start(self):
         self.logger.info("starting ...")
         
-        if self.is_active():
-            self.logger.warning("receiver is already started, restarting ...")
-            self.stop()
+        assert not self.is_active(), "trying to start a receiver that has already started"
         
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.SUB)
@@ -185,8 +179,8 @@ class ZMQReceiver():
         try:
             data = self.socket.recv_json()
             frame = self.socket.recv(copy=False, track=False)
-        except zmq.error.Again:
-            self.logger.warning("could not receive data")
+        except zmq.error.Again as e:
+            self.logger.warning(f"could not receive data: {e}")
             return None
         except zmq.error.ZMQError as e:
             self.logger.warning(f"ZMQ error: {e}")

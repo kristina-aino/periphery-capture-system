@@ -7,8 +7,8 @@ from concurrent.futures import ThreadPoolExecutor
 from multiprocessing import Process, Event
 from multiprocessing import TimeoutError as ProcessTimeoutError
 
-from .datamodel import FramePacket, PeripheryDevice, CameraDevice, AudioDevice, PortNumber
-from .deviceIO import FFMPEGReader, CameraDeviceReader, AudioDeviceReader
+from .datamodel import PeripheryDevice, CameraDevice, AudioDevice
+from .deviceIO import CameraDeviceReader, AudioDeviceReader
 from .zmqIO import ZMQSender, ZMQReceiver, ZMQProxy
 
 # ------------- SINGLE STREAM CLASSES -------------
@@ -32,19 +32,13 @@ class InputStreamSender:
     
     def start_process(self):
         
-        self.logger.info("starting ...")
-        
         assert not self.is_active(), "trying to start a process that has already started, restarting ..."
         
         self.stop_event.clear()
         self.process = Process(target=self._run)
         self.process.start()
         
-        self.logger.info("started !")
-        
     def stop_process(self, timeout=1):
-        
-        self.logger.info("stopping...")
         
         self.stop_event.set()
         
@@ -57,8 +51,6 @@ class InputStreamSender:
             self.process.terminate()
         
         self.process = None
-        
-        self.logger.info("stopped !")
         
     def _run(self):
         
@@ -101,8 +93,10 @@ class InputStreamSender:
 
 class InputStreamReceiver:
     
-    def __init__(self, proxy_pub_port: int, host: str = "127.0.0.1"):
+    def __init__(self, devices: List[PeripheryDevice], proxy_pub_port: int, host: str = "127.0.0.1"):
         self.logger = getLogger(f"{self.__class__.__name__}" )
+        
+        self.devices = devices
         
         self.zmq_receiver = ZMQReceiver(host=host, port=proxy_pub_port)
     
@@ -112,50 +106,75 @@ class InputStreamReceiver:
     def stop(self):
         self.zmq_receiver.stop()
         
-    def read(self):
-        frame_packet = self.zmq_receiver.receive()
-        return frame_packet
+    def read(self, read_attemps: int = 10):
+        output = {}
+        
+        while len(output) < len(self.devices):
+            
+            if read_attemps <= 0:
+                return None
+            
+            frame_packet = self.zmq_receiver.receive()
+            
+            if frame_packet is None:
+                read_attemps -= 1
+                continue
+            if frame_packet.device.device_id in output:
+                read_attemps -= 1
+            
+            output[frame_packet.device.device_id] = frame_packet
+        
+        return output
 
 # ------------- MULTI STREAM CLASSES -------------
 
 class MultiInputStreamSender:
     
-    def __init__(self, devices: List[PeripheryDevice], proxy_sub_port: int, host: str = "127.0.0.1"):
+    def __init__(self, devices: List[PeripheryDevice], proxy_sub_port: int, proxy_pub_port: int, host: str = "127.0.0.1"):
         self.logger = getLogger(self.__class__.__name__)
         
         self.input_sender = [InputStreamSender(device, proxy_sub_port, host) for device in devices]
+        self.zmq_proxy = ZMQProxy(host, sub_port=proxy_sub_port, pub_port=proxy_pub_port)
         
         self.logger.info(f"multi input stream sender with {len(self.input_sender)} senders")
         
+    def start_processes(self):
+        
+        self.zmq_proxy.start_process()
+        
+        for sub in self.input_sender:
+            sub.start_process()
+        
     def stop_processes(self, timeout: float = 1):
+        
         for sub in self.input_sender:
             sub.stop_process(timeout=timeout)
         
-    def start_processes(self):
-        for sub in self.input_sender:
-            sub.start_process()
+        self.zmq_proxy.stop_process()
+        
+        
 
 # class MultiInputStreamReceiver:
     
 #     def __init__(self, sender_port: int, receiver_port, host: str = "127.0.0.1"):
         
 #         self.logger = getLogger(self.__class__.__name__)
-#         self.capture_reciever = InputStreamReceiver(port, host)
+#         self.capture_receiver = InputStreamReceiver(port, host)
 #         self.proxy = ZMQProxy(host, )
         
-#         self.executor = ThreadPoolExecutor(max_workers=len(self.capture_reciever))
+#         self.executor = ThreadPoolExecutor(max_workers=len(self.capture_receiver))
         
         
 #     def start(self):
-#         for rec in self.capture_reciever:
+#         for rec in self.capture_receiver:
 #             rec.start()
         
 #     def stop(self):
-#         for rec in self.capture_reciever:
+#         for rec in self.capture_receiver:
 #             rec.stop()
         
 #     def read(self):
-#         futures = [self.executor.submit(rec.read) for rec in self.capture_reciever]
+#         futures = [self.executor.submit(rec.read) for rec in self.capture_receiver]
 #         frames = [future.result() for future in futures]
 #         if any([frame is None for frame in frames]):
 #             return None

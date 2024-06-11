@@ -13,8 +13,8 @@ import device_capture_system.datamodel as datamodel
 def zmq_sender():
     return zmqIO.ZMQSender(host="127.0.0.1", port=1025)
 @pytest.fixture
-def zmq_reciever():
-    return zmqIO.ZMQReciever(host="127.0.0.1", port=1025)
+def zmq_receiver():
+    return zmqIO.ZMQreceiver(host="127.0.0.1", port=1025)
 @pytest.fixture
 def frame_packet():
     return datamodel.FramePacket(
@@ -33,26 +33,26 @@ def test_zmq_sender_open_close(zmq_sender):
     zmq_sender.stop()
     assert not zmq_sender.is_active()
 
-def test_zmq_reciever_open_close(zmq_reciever):
-    zmq_reciever.start()
-    assert zmq_reciever.is_active()
-    zmq_reciever.stop()
-    assert not zmq_reciever.is_active()
+def test_zmq_receiver_open_close(zmq_receiver):
+    zmq_receiver.start()
+    assert zmq_receiver.is_active()
+    zmq_receiver.stop()
+    assert not zmq_receiver.is_active()
 
-def test_zmq_sender_send(zmq_sender, zmq_reciever, frame_packet):
+def test_zmq_sender_send(zmq_sender, zmq_receiver, frame_packet):
     
     zmq_sender.start()
-    zmq_reciever.start()
+    zmq_receiver.start()
     
     sender_thread = Thread(target=zmq_sender.send, args=(frame_packet,))
-    reciever_thread = Thread(target=zmq_reciever.recieve)
+    receiver_thread = Thread(target=zmq_receiver.recieve)
     
-    reciever_thread.start()
+    receiver_thread.start()
     sleep(0.1)
     sender_thread.start()
     
     sender_thread.join()
-    reciever_thread.join()
+    receiver_thread.join()
     
     zmq_sender.stop()
-    zmq_reciever.stop()
+    zmq_receiver.stop()
