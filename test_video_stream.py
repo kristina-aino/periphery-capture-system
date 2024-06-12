@@ -5,6 +5,10 @@ import argparse
 from logging import getLogger, basicConfig
 from traceback import format_exc
 
+from device_capture_system.core import MultiInputStreamSender, InputStreamReceiver
+from device_capture_system.deviceIO import load_all_devices_from_config
+from device_capture_system.datamodel import FramePreprocessing
+
 # ---------------------------------------------------------------------
 
 AP = argparse.ArgumentParser()
@@ -21,11 +25,6 @@ basicConfig(level=ARGS.logging_level.upper())
 logger = getLogger(__name__)
 
 # ---------------------------------------------------------------------
-
-# Setp 1: read camera configurations for all cameras
-from device_capture_system.core import MultiInputStreamSender, InputStreamReceiver
-from device_capture_system.deviceIO import load_all_devices_from_config
-from device_capture_system.datamodel import FramePreprocessing
 
 if __name__ == "__main__":
     

@@ -45,13 +45,15 @@ class MediaFile(BaseModel):
     file_extension: StrictNonEmptyStr
 
 class VideoFile(MediaFile):
+    width: Annotated[StrictInt, Field(ge=640, le=3840)]
+    height: Annotated[StrictInt, Field(ge=480, le=2160)]
     fps: Annotated[StrictFloat, Field(ge=15, le=120)]
     seconds: Annotated[StrictFloat, Field(ge=1)] # Number of seconds in output video
     codec: StrictNonEmptyStr
 
 class ImageFile(MediaFile):
     jpg_quality: Annotated[StrictInt, Field(ge=0, le=100)]
-    png_compression: Annotated[StrictInt, Field(ge=0, le=100)]
+    png_compression: Annotated[StrictInt, Field(ge=0, le=9)]
 
 # ---------- BASE CLASSES ----------
 

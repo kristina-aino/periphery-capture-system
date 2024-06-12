@@ -112,9 +112,7 @@ class InputStreamReceiver:
     
     def __init__(self, devices: List[PeripheryDevice], proxy_pub_port: int, host: str = "127.0.0.1"):
         self.logger = getLogger(f"{self.__class__.__name__}" )
-        
         self.devices = devices
-        
         self.zmq_receiver = ZMQReceiver(host=host, port=proxy_pub_port)
     
     def start(self):
