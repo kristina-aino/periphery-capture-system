@@ -1,5 +1,6 @@
 # project specific
 saved_videos/
+saved_images/
 .vscode/
 ffmpeg-master*
 

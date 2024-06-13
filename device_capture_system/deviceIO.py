@@ -77,7 +77,6 @@ class FFMPEGReader(ABC):
             self.container.close()
             self.container = None
         self.stream = None
-        self.is_active = False
         
         self.logger.info("stopped!")
     
@@ -86,22 +85,24 @@ class FFMPEGReader(ABC):
         
         self.logger.info(f"Starting ...")
         
-        if self.is_active():
-            self.logger.warning(f"Trying to start a reader that has already been started, stopping and restarting ...")
+        assert not self.is_active(), f"Trying to start a reader that has already been started ..."
+        
+        try:
+            # set container
+            self.container = av.open(file=file_string, format='dshow', options=options)
+            
+            self.logger.debug(f"Open Container with options: {options}")
+            
+            # set stream (audio or video)
+            if self.device.device_type == "audio":
+                self.stream = self.container.streams.audio[0]
+            elif self.device.device_type == "video":
+                self.stream = self.container.streams.video[0]
+            else:
+                raise Exception("No audio or video stream found ...")
+            
+        except Exception as e:
             self.stop()
-        
-        # set container
-        self.container = av.open(file=file_string, format='dshow', options=options)
-        
-        self.logger.debug(f"Open Container with options: {options}")
-        
-        # set stream (audio or video)
-        if self.device.device_type == "audio":
-            self.stream = self.container.streams.audio[0]
-        elif self.device.device_type == "video":
-            self.stream = self.container.streams.video[0]
-        else:
-            raise Exception("No audio or video stream found ...")
         
         self.logger.info(f"started !")
     
@@ -182,240 +183,3 @@ class AudioDeviceReader(FFMPEGReader):
             format='dshow',
         )
 
-
-# class CameraDeviceReader(DeviceReader):
-#     def __init__(
-#         self, 
-#         camera: CameraDevice, 
-#         max_consec_failures: int = 10, 
-#         frame_transform: str = None):
-        
-#         super().__init__(logger_name=f"{__class__.__name__}@{camera.uuid}")
-        
-#         self.max_consec_failures = max_consec_failures
-#         self.camera = camera
-#         self.fail_counter = 0
-        
-#         # set backend and capture
-#         self.capture = cv2.VideoCapture(self.camera.id, cv2Backends[system()])
-        
-#         # set capture parameters and test
-#         set_fps = self.capture.set(cv2.CAP_PROP_FPS, self.camera.fps)
-#         set_width = self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, self.camera.width)
-#         set_height = self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, self.camera.height)
-        
-#         if not set_fps or not set_width or not set_height:
-#             self.logger.error(f"inccorect set : set_fps = {set_fps}, set_width = {set_width}, set_height = {set_height} ...")
-#             raise Exception("Failed to set camera parameters ...")
-        
-#         # define frame transform
-#         if frame_transform == "ROTATE_90_CLOCKWISE":
-#             self.frame_transform = lambda frame: rotate(frame, ROTATE_90_CLOCKWISE)
-#         elif frame_transform == "ROTATE_90_COUNTERCLOCKWISE":
-#             self.frame_transform = lambda frame: rotate(frame, ROTATE_90_COUNTERCLOCKWISE)
-#         elif frame_transform == "ROTATE_180":
-#             self.frame_transform = lambda frame: rotate(frame, ROTATE_180)
-#         else:
-#             self.frame_transform = lambda frame: frame
-        
-        
-#         # initialize camera befor use
-#         self.initialize()
-        
-#     def is_open(self):
-#         return self.capture.isOpened()
-    
-#     def initialize(self):
-#         super().initialize()
-        
-#         try:
-#             open_attempts = 0
-            
-#             while True:
-                
-#                 assert open_attempts < self.max_consec_failures, f"{self.camera.uuid} :: Failed to open capture after {open_attempts} attempts"
-                
-#                 self.logger.info(f"{self.camera.uuid} :: Attempting to open capture {open_attempts}/{self.max_consec_failures} ...")
-                
-#                 # try read frames
-#                 if not self.is_open():
-                    
-#                     self.logger.warning(f"{self.camera.uuid} :: Capture not open ...")
-                    
-#                     self.capture.open(self.camera.id, CV2_BACKENDS.get(system(), cv2.CAP_ANY))
-#                     sleep(0.33)
-#                     open_attempts += 1
-#                     continue
-                
-#                 read_attempts = 0
-#                 for _ in range(self.max_consec_failures):
-#                     self.logger.info(f"{self.camera.uuid} :: Capture open, try reading {read_attempts}/{self.max_consec_failures} ...")
-                    
-#                     ok, _ = self.capture.read()
-#                     if ok:
-#                         self.logger.info(f"{self.camera.uuid} :: Camera initialization successful!")
-#                         return
-#                     read_attempts += 1
-                
-            
-#         except:
-#             raise
-        
-#     def stop(self):
-#         super().stop()
-#         self.capture.release()
-#         self.logger.info(f"{self.camera.uuid} :: Capture stoped")
-        
-#     def read_(self):
-        
-#         try:
-#             # try read frame and define camera read time
-#             ok, frame = self.capture.read()
-            
-#             # count incorrect reads
-#             if not ok:
-#                 # log warning and increment fail counter
-#                 self.logger.warning(f"{self.camera.uuid} :: reader issue for {self.fail_counter}/{self.max_consec_failures} frames ...")
-#                 self.fail_counter += 1
-#                 # close and throw if too many failures
-#                 assert self.fail_counter < self.max_consec_failures, f"{self.camera.uuid} :: no valid frame found after {self.fail_counter} consecutive attempts"
-                
-#                 sleep(0.33)
-#                 return None
-            
-#             # successfull read, reset fail counter and return
-#             self.fail_counter = 0
-#             frame = self.frame_transform(frame)
-#             return frame
-        
-#         except KeyboardInterrupt:
-#             self.logger.info(f"KeyboardInterrupt ...")
-#             self.stop()
-#             raise
-#         except:
-#             self.logger.error(format_exc())
-#             self.stop()
-#             raise
-        
-#     def read(self):
-#         frames, start_read_dt, end_read_dt = super().read()
-#         return CameraFramePacket(device=self.camera, frames=frames, start_read_dt=start_read_dt, end_read_dt=end_read_dt)
-
-
-# # ------------------- AudioIO ------------------- #
-
-# class AudioInputDevice(DeviceReader):
-#     def __init__(self, audio_device: AudioDevice, max_consec_failures: int = 10):
-#         super().__init__()
-        
-#         self.audio_device = audio_device
-#         self.max_consec_failures = max_consec_failures
-        
-#         # create pyaudio instance
-#         self.audio = PyAudio()
-#         self.stream = self.audio.open(
-#                     start=False,
-#                     format=paInt16, 
-#                     output=audio_device.type == "output",
-#                     input=audio_device.type == "input",
-#                     input_device_index=audio_device.id,
-#                     channels=audio_device.channels,
-#                     rate=audio_device.sample_rate,
-#                     frames_per_buffer=audio_device.frames_per_buffer)
-        
-#         self.initialize()
-        
-#     @classmethod
-#     def list_devices(cls):
-#         audio = PyAudio()
-#         for i in range(audio.get_device_count()):
-#             print(audio.get_device_info_by_index(i))
-#         audio.terminate()
-        
-#     def initialize(self):
-#         super().initialize()
-        
-        
-#         '''
-#             multiple attepmts to start a stream
-            
-#         '''
-#         try:
-            
-#             start_attempts = 0
-            
-#             while start_attempts < self.max_consec_failures:
-                
-#                 self.logger.info(f"Attempting to start audio stream {start_attempts}/{self.max_consec_failures} ...")
-                
-#                 self.stream.start_stream()
-                
-#                 if not self.stream.is_active():
-#                     self.logger.info(f"Failed to start audio stream ({start_attempts}/{self.max_consec_failures}) ...")
-                    
-#                     if start_attempts >= self.max_consec_failures:
-#                         self.logger.error(f"Failed to start audio stream after {start_attempts} attempts ...")
-#                         raise Exception("Failed to start audio stream ...")
-                    
-#                     start_attempts += 1
-#                     sleep(0.33)
-#                     continue
-                
-#                 self.logger.info(f"Audio stream initialized successfully ...")
-#                 # self.stream.stop_stream()
-#                 break
-#         except:
-#             raise
-        
-#     def is_open(self):
-#         return not self.stream.is_stopped()
-    
-#     # def start(self):
-#     #     super().start()
-#     #     try:
-#     #         self.stream.start_stream()
-#     #         self.logger.info(f"Audio stream started ...")
-#     #     except Exception as e:
-#     #         raise e
-        
-#     def stop(self):
-#         super().stop()
-#         try:
-#             self.stream.stop_stream()
-#             self.logger.info(f"Audio stream stopped ...")
-#         except Exception as e:
-#             raise e
-        
-#     def read_(self):
-#         try:
-#             # read audio frames
-#             frames = frombuffer(self.stream.read(self.audio_device.frames_per_buffer), dtype="int16")
-            
-#             # count incorrect reads
-#             if frames is None or len(frames) == 0:
-#                 # log warning and increment fail counter
-#                 self.logger.warning(f"{self.camera.uuid} :: reader issue for {self.fail_counter}/{self.max_consec_failures} frames ...")
-#                 self.fail_counter += 1
-#                 # close and throw if too many failures
-#                 assert self.fail_counter < self.max_consec_failures, f"{self.camera.uuid} :: no valid frame found after {self.fail_counter} consecutive attempts"
-                
-#                 sleep(0.33)
-#                 return None
-            
-#             # successfull read, reset fail counter and return
-#             self.fail_counter = 0
-#             return frames
-        
-#         except KeyboardInterrupt:
-#             self.logger.info(f"KeyboardInterrupt ...")
-#             self.stop()
-#             raise
-#         except:
-#             self.logger.error(format_exc())
-#             self.stop()
-#             raise
-        
-#     def read(self):
-#         frames, start_read_dt, end_read_dt = super().read()
-#         return AudioFramePacket(device=self.audio_device, frames=frames, start_read_dt=start_read_dt, end_read_dt=end_read_dt)
-        

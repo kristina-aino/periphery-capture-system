@@ -133,6 +133,8 @@ class ImageSaver:
         num_workers: int = 8):
         self.logger = getLogger(f"{self.__class__.__name__}")
         
+        assert len(np.unique([cam.name for cam in cameras])) == len(cameras), "All cameras must have unique names"
+        
         # set image parameters
         self.cameras = cameras
         self.image_files = [
@@ -152,6 +154,13 @@ class ImageSaver:
         self.num_workers = num_workers
         self.futures = []
         
+        # create directories if not exist
+        for image_file in self.image_files:
+            if not os.path.exists(image_file.file_path):
+                os.makedirs(image_file.file_path)
+                self.logger.info(f"directory {image_file.file_path} created")
+        
+        
     def start(self):
         assert self.pool is None, "trying to start a process that has already started"
         self.stream_receiver.start()
@@ -167,7 +176,7 @@ class ImageSaver:
             except Exception as e:
                 self.logger.error(f"Error while waiting for process to finish: {e}")
         
-        if self.pool is None:
+        if self.pool is not None:
             self.pool.close()
         
         for worker in self.pool._pool:
@@ -178,12 +187,22 @@ class ImageSaver:
                 self.logger.error(f"Error while joining worker: {e}, terminating ...")
                 worker.terminate()
         
+        self.pool.join()
         self.pool = None
         
-    def save_image_(self, frame_packet: FramePacket, image_file: ImageFile, image_name: str):
+    def check_futures(self):
+        for result in self.futures:
+            if result.ready():
+                try:
+                    result.get()
+                except Exception as e:
+                    self.logger.error(f"Error produced by future: {e}")
+    
+    @staticmethod
+    def _save_image(frame: np.ndarray, image_file: ImageFile, image_name: str):
         
         image_uri = os.path.join(image_file.file_path, f"{image_name}.{image_file.file_extension}")
-        image = Image.fromarray(frame_packet.frames)
+        image = Image.fromarray(frame)
         
         if image_file.file_extension == "jpg":
             image.save(image_uri, quality=image_file.jpg_quality)
@@ -196,21 +215,35 @@ class ImageSaver:
         
         # check if frames is None, if so increment timeout counter and wait for 1 second
         if frames is None:
-            sleep(1)
-            self.logger.info(f"timeout while waiting for frames ...")
             return False
         
         # clean up results
+        self.check_futures() # check for errors
         self.futures = [r for r in self.futures if not r.ready()]
-        self.logger.info(f"not-ready process results in queue: {len(self.futures)}")
+        self.logger.debug(f"not-ready process results in queue: {len(self.futures)}")
         
-        try:
-            image_name = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            self.logger.info(f"saving images ...")
-            for (i, k) in enumerate(self.cameras):
-                result = self.pool.apply_async(self.save_image_, (frames[k], self.image_files[i], image_name))
-                self.futures.append(result)
-        except:
-            return False
+        # save images
+        self.logger.info(f"saving images {image_name} ...")
+        for (i, camera) in enumerate(self.cameras):
+            cam_id = camera.device_id
+            result = self.pool.apply_async(ImageSaver._save_image, (frames[cam_id].frame, self.image_files[i], image_name))
+            self.futures.append(result)
         
         return True
+    
+    def save_images(self, number_of_images: int, bad_frames_timeout: int = 25):
+        
+        saved_images = 0
+        timeout_counter = 0
+        while saved_images < number_of_images:
+            
+            ok = self.save_image(f"{datetime.now().strftime('%Y-%m-%d_%H-%M-%S-%f')}")
+            if not ok:
+                sleep(1)
+                timeout_counter += 1
+                self.logger.info(f"timeout while waiting for frames: {timeout_counter}/{bad_frames_timeout}")
+                assert timeout_counter < bad_frames_timeout, f"timeout while waiting for frames"
+                continue
+            
+            timeout_counter = 0
+            saved_images += 1
