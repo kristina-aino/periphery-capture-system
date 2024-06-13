@@ -1,65 +1,96 @@
-# camera-capture-system
+# Device Capture System
 
 ## Description
 
-A system that:
-1) captures USB camera feeds using openCV with platform specific backends
-2) syncronizes the video feeds and adds metadata
-3) sends the resulting frame and metadata over a network connection using ZMQ PubSub
+A simple system to capture ffmpeg input devices (cameras and microphones), **currently only using dshow-capture on windows**.
 
-## Usage
-
-### clone the repo and cd into it
+## Environment Setup
+### 1) clone the repo and cd into directory
 ```shell
-git clone https://github.com/kristina-aino/camera-capture-system.git
-cd camera-capture-system
+git clone https://github.com/kristina-aino/device-capture-system
+cd device-capture-system
 ```
-### poetry setup, test and build
+---
+### 2) poetry setup, test and build
+- activate an environment that has `poetry` installed.
 ```shell
 poetry install
-poetry run pytest
-poetry build
+poetry run python -m pytest
 ```
-### create the config file for your camera setup
-#### Example
-> ```json
-> {
->   "cam0": {
->     "id": 1,
->     "width": 1920,
->     "height": 1080,
->     "fps": 30,
->     "name": "A-webcam",
->     "position": "center"
->   },
->   "cam1": {
->     "id": 0,
->     "width": 1920,
->     "height": 1080,
->     "fps": 60,
->     "name": "Another-webcam",
->     "position": "center-right"
->   },
-> }
-> ```
-> - "cam0", "cam1", etc. is considered the uuid and is required to be unique (enforced by json standard)
-> - "id" is the OpenCV id the camera runs under 
-> - "width", "height" and "fps" are camera specification
-> - "name" and "position" are human redables with no logical value
-### Start the capture and publishing on localhost port 10000
+
+## Device Setup
+### 1) Pull All Devices through `ffmpeg`
+- make sure to have `ffmpeg` installed
+- `ffmpeg` should be available to the commandline inside the project
+#### Print all devices to check
 ```shell
-poetry run python main.py
+poetry run python ./device_helper.py -p
 ```
-### Or use it as a module
-```python
-from camera_capture_system.core import load_all_cameras_from_config, MultiCameraCaptureAndPublish
-
-cameras = load_all_cameras_from_config(path_to_conf)
-
-pccp = MultiCameraCaptureAndPublish(cameras=cameras)
-pccp.start()
-
+#### Save all devices in raw format to `./configs/raw_devices.json` (or any other directory)
+```shell
+poetry run python ./device_helper.py -s -o ./configs/raw_devices.json
+```
+#### Example raw device list produced by `device_helper`
+```json
+[
+    {
+        "device_id": "@device_pnp_\\\\?\\usb#vid_046d&pid_0893&mi_00#6&dc72295&0&0000#{65e8773d-8f56-11d0-a3b9-00a0c9223196}\\global",
+        "name": "Logitech StreamCam",
+        "device_type": "video"
+    },
+    {
+        "device_id": "@device_cm_{33D9A762-90C8-11D0-BD43-00A0C911CE86}\\wave_{BA043884-E5A5-4D31-BA09-A26EEBB846D1}",
+        "name": "Microphone (Arctis 7+)",
+        "device_type": "audio"
+    }
+]
+```
+---
+### 2) Add information to the devices depending on your hardware specification selection
+- Im storing these in `./configs/devices.json`
+- add information abuot capture `width`, `height` and capture `fps` to your camera devices
+- add `channels`, `sample rate`, `sample size` in bits and `audio buffer size` to the audio devices
+#### Example of `devices.json`
+```json
+[
+  {
+    "device_id": "@device_pnp_\\\\?\\usb#vid_046d&pid_0893&mi_00#6&dc72295&0&0000#{65e8773d-8f56-11d0-a3b9-00a0c9223196}\\global",
+    "name": "Logitech-StreamCam.center",
+    "device_type": "video",
+    "width": 1920,
+    "height": 1080,
+    "fps": 30
+  },
+  {
+    "device_id": "@device_cm_{33D9A762-90C8-11D0-BD43-00A0C911CE86}\\wave_{BA043884-E5A5-4D31-BA09-A26EEBB846D1}",
+    "name": "Microphone (Arctis 7+)",
+    "device_type": "audio",
+    "channels": 1,
+    "sample_rate": 88200,
+    "sample_size": 16,
+    "audio_buffer_size": 20
+  }
+]
+```
+- you can find this information by running the following command: ( insert `device_id` or `name` from above into the brackets {} )
+```shell
+ffmpeg -f dshow -list_options true -i video="{device_id}"
 ```
 
-*(if there are problems, feel free to create an issue)*
-
+## Usage
+### Test the video stream
+```shell
+poetry run python ./test_video_stream.py --num_frames 600
+```
+### Test the audio stream
+```shell
+poetry run python ./test_audio_stream.py
+```
+### Save a video
+```shell
+poetry run python ./save_video.py --output_path ./saved_videos/
+```
+### Save some images
+```shell
+poetry run python ./save_images.py --output_path ./saved_images/ --num_images 100
+```

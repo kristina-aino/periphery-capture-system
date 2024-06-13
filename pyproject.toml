@@ -1,7 +1,7 @@
 [tool.poetry]
-name = "periphery-capture-system"
-version = "1.0.1"
-description = "periphery capture system to capture and maintain connection to multiple cameras and microphone to send data over zmq"
+name = "device-capture-system"
+version = "1.1.0"
+description = "device capture system to capture and maintain connection to multiple cameras and microphone to send data over zmq"
 authors = ["kristina-aino <kristina.ai@proton.me>"]
 readme = "README.md"
 packages = [{include = "device_capture_system"}]
@@ -13,7 +13,6 @@ opencv-python = "^4.8"
 numpy = "^1.26"
 pydantic = "^2.5"
 av = "^12.1.0"
-ipython = "^8.25.0"
 matplotlib = "^3.9.0"
 progress = "^1.6"
 pillow = "^10.3.0"
