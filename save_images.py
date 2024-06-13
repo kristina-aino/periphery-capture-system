@@ -19,6 +19,7 @@ AP.add_argument("--proxy_sub_port", type=int, default=10000, help="port for prox
 AP.add_argument("--proxy_pub_port", type=int, default=10001, help="port for proxy publisher")
 
 AP.add_argument("--output_path", type=str, required=True, help="output path")
+AP.add_argument("--num_images", type=int, default=100, help="number of images to save")
 AP.add_argument("--image_file_extension", type=str, default="jpg", help="image file extension", choices=["jpg", "png"])
 AP.add_argument("--jpg_quality", type=int, default=95, help="jpg quality")
 AP.add_argument("--png_compression", type=int, default=3, help="png compression level")
@@ -52,6 +53,7 @@ if __name__ == "__main__":
         proxy_sub_port=ARGS.proxy_sub_port,
         proxy_pub_port=ARGS.proxy_pub_port,
         host=ARGS.host,
+        zmq_proxy_queue_size=10,
         frame_preprocessings=[
             FramePreprocessing.ROTATE_90_CLOCKWISE,
             FramePreprocessing.ROTATE_90_CLOCKWISE,
@@ -62,10 +64,11 @@ if __name__ == "__main__":
     
     try:
         
-        input_stream_sender.start_processes()
         image_saver.start()
+        input_stream_sender.start_processes()
         
-        image_saver.save_images(50)
+        image_saver.save_images(ARGS.num_images)
+        
         
     except Exception as e:
         raise e

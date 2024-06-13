@@ -50,6 +50,7 @@ if __name__ == "__main__":
         proxy_sub_port=ARGS.proxy_sub_port,
         proxy_pub_port=ARGS.proxy_pub_port,
         host=ARGS.host,
+        zmq_proxy_queue_size=1000,
         frame_preprocessings=[
             FramePreprocessing.ROTATE_90_CLOCKWISE,
             FramePreprocessing.ROTATE_90_CLOCKWISE,
@@ -57,11 +58,10 @@ if __name__ == "__main__":
         ]
     )
     
-    
     try:
         
-        input_stream_sender.start_processes()
         video_saver.start()
+        input_stream_sender.start_processes()
         
         
         video_saver.save_video(video_name=f"{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}")

@@ -17,6 +17,8 @@ AP.add_argument("--proxy_sub_port", type=int, default=10000, help="port for prox
 AP.add_argument("--proxy_pub_port", type=int, default=10001, help="port for proxy publisher")
 AP.add_argument("--host", type=str, default="127.0.0.1", help="host name or ip of the server")
 AP.add_argument("-ll", "--logging_level", type=str, default="info", help="logging level", choices=["debug", "warning", "error"])
+AP.add_argument("--num_frames", type=int, default=300, help="number of frames to collect")
+
 ARGS = AP.parse_args()
 
 # ---------------------------------------------------------------------
@@ -53,12 +55,12 @@ if __name__ == "__main__":
     
     try:
         
-        multi_sender.start_processes()
         receiver.start()
+        multi_sender.start_processes()
         
         time_taken = 0
         collected_frames = 0
-        frames_to_collect = 180
+        frames_to_collect = ARGS.num_frames
         while collected_frames < frames_to_collect:
             dt = time.time()
             frames = receiver.read()
@@ -72,7 +74,7 @@ if __name__ == "__main__":
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
             
-            print(f"collected {collected_frames} frames")
+            print(f"collected {collected_frames}/{frames_to_collect} frames")
         print(f"fps: {frames_to_collect / time_taken}")
         
         

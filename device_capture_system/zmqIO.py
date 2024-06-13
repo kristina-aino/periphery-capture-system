@@ -13,9 +13,10 @@ from device_capture_system import datamodel
 
 
 class ZMQProxy():
-    def __init__(self, host: str, sub_port: int, pub_port: int):
+    def __init__(self, host: str, sub_port: int, pub_port: int, queue_size: int = 10):
         self.logger = getLogger(f"{self.__class__.__name__}@{host}:{sub_port}->{pub_port}")
         
+        self.queue_size = queue_size
         self.host = host
         self.sub_port = sub_port
         self.pub_port = pub_port
@@ -56,6 +57,9 @@ class ZMQProxy():
         xsub_socket = context.socket(zmq.XSUB)
         xpub_socket = context.socket(zmq.XPUB)
         
+        xsub_socket.setsockopt(zmq.RCVHWM, self.queue_size)
+        xpub_socket.setsockopt(zmq.SNDHWM, self.queue_size)
+        
         try:
             xsub_socket.bind(f"tcp://{self.host}:{self.sub_port}")
             
@@ -72,7 +76,7 @@ class ZMQProxy():
 
 class ZMQSender():
     
-    def __init__(self, host: str, port: int, q_size: int = 1):
+    def __init__(self, host: str, port: int, q_size: int = 10):
         
         self.logger = getLogger(f"{self.__class__.__name__}@{host}:{port}")
         
@@ -129,7 +133,7 @@ class ZMQSender():
 
 class ZMQReceiver():
     
-    def __init__(self, host: str, port: int, q_size: int = 1, receive_wait_time_ms: int = 1000):
+    def __init__(self, host: str, port: int, q_size: int = 10, receive_wait_time_ms: int = 1000):
         
         self.logger = getLogger(f"{self.__class__.__name__}@{host}:{port}")
         

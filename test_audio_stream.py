@@ -53,8 +53,8 @@ if __name__ == "__main__":
     
     try:
         
-        multi_sender.start_processes()
         receiver.start()
+        multi_sender.start_processes()
         
         time_taken = 0
         collected_frames = 0
