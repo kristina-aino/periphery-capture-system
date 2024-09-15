@@ -10,7 +10,7 @@
         "device_type": "video"
     },
     {
-        "device_id": "@device_pnp_\\\\?\\usb#vid_1532&pid_0e05&mi_00#6&1a97b57c&0&0000#{65e8773d-8f56-11d0-a3b9-00a0c9223196}\\global",
+        "device_id": "@device_pnp_\\\\?\\usb#vid_1532&pid_0e05&mi_00#6&2d516621&0&0000#{65e8773d-8f56-11d0-a3b9-00a0c9223196}\\global",
         "name": "USB Video Device",
         "device_type": "video"
     },
@@ -20,22 +20,17 @@
         "device_type": "video"
     },
     {
-        "device_id": "@device_cm_{33D9A762-90C8-11D0-BD43-00A0C911CE86}\\wave_{BA043884-E5A5-4D31-BA09-A26EEBB846D1}",
-        "name": "Microphone (Arctis 7+)",
-        "device_type": "audio"
-    },
-    {
-        "device_id": "@device_cm_{33D9A762-90C8-11D0-BD43-00A0C911CE86}\\wave_{0F771C7A-E0B8-4EB8-8E38-08542940E824}",
-        "name": "Microphone (6- Razer Kiyo Pro)",
-        "device_type": "audio"
-    },
-    {
-        "device_id": "@device_cm_{33D9A762-90C8-11D0-BD43-00A0C911CE86}\\wave_{27C0EAC6-29F5-4B7A-8941-BF823073A9EB}",
+        "device_id": "@device_cm_{33D9A762-90C8-11D0-BD43-00A0C911CE86}\\wave_{6CC530D7-92B0-4724-87B6-A0E194C12FDA}",
         "name": "Microphone (2- Logitech StreamCam)",
         "device_type": "audio"
     },
     {
         "device_id": "@device_cm_{33D9A762-90C8-11D0-BD43-00A0C911CE86}\\wave_{B4A3C0A3-66BD-4F78-B44F-3C11FE4CB3BF}",
+        "name": "Microphone (3- Razer Kiyo Pro)",
+        "device_type": "audio"
+    },
+    {
+        "device_id": "@device_cm_{33D9A762-90C8-11D0-BD43-00A0C911CE86}\\wave_{C4AB4A24-90E9-4921-83DC-D4C705F52C55}",
         "name": "Microphone (9- Razer Kiyo Pro)",
         "device_type": "audio"
     }

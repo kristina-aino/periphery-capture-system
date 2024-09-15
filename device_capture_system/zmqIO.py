@@ -76,9 +76,12 @@ class ZMQProxy():
 
 class ZMQSender():
     
-    def __init__(self, host: str, port: int, q_size: int = 10):
+    def __init__(self, host: str, port: int, q_size: int = 10, name: str = None):
         
-        self.logger = getLogger(f"{self.__class__.__name__}@{host}:{port}")
+        if name is not None:
+            self.logger = getLogger(f"{self.__class__.__name__}@{name}")
+        else:
+            self.logger = getLogger(f"{self.__class__.__name__}@{host}:{port}")
         
         self.host = host
         self.port = port

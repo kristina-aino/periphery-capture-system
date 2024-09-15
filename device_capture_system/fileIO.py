@@ -1,5 +1,6 @@
 import av
 import os
+import tqdm
 import cv2
 import numpy as np
 
@@ -32,6 +33,8 @@ class VideoSaver:
         
         assert len(np.unique([cam.name for cam in cameras])) == len(cameras), "All cameras must have unique names"
         
+        self.logger.warning("!! HARD CODED BEHAVIOUR: FRAME PREPROCESSING ON MY MACHINE REQUIRES THE WIDTH AND HEIGHT TO BE SWAPPED THE VIDEO SAVER IS HARDCODED TO REFLECT THIS, PLEASE CHANGE VideoFile IN fileIO!!")
+        
         # initialize video files
         self.video_files = [
             VideoFile(
@@ -46,10 +49,10 @@ class VideoSaver:
             ) for cam in cameras]
         
         # create directories if not exist
-        for video_file in self.video_files:
+        for video_file in tqdm.tqdm(self.video_files, desc="creating directories"):
             if not os.path.exists(video_file.file_path):
                 os.makedirs(video_file.file_path)
-                self.logger.info(f"directory {video_file.file_path} created")
+                self.logger.debug(f"directory {video_file.file_path} created")
         
     def start(self):
         self.stream_receiver.start()
@@ -77,47 +80,46 @@ class VideoSaver:
         
         try:
             
-            self.logger.info("saving video ...")
-            
-            while collected_frames < frames_to_collect:
-                
-                frames = self.stream_receiver.read()
-                
-                # check if frames is None, if so increment timeout counter and wait for 1 second
-                if frames is None:
-                    sleep(1)
-                    timeout_counter += 1
-                    self.logger.info(f"timeout while waiting for frames: {timeout_counter}/{bad_frames_timeout}")
-                    assert timeout_counter < bad_frames_timeout, f"timeout while waiting for frames"
-                    continue
-                
-                timeout_counter = 0
-                collected_frames += 1
-                
-                for (i, cam) in enumerate(self.cameras):
+            with tqdm.tqdm(total=frames_to_collect, desc="saving video") as tqdm_bar:
+                while collected_frames < frames_to_collect:
                     
-                    av_frame = av.VideoFrame.from_ndarray(frames[cam.device_id].frame, format="rgb24")
-                    av_frame = av_frame.reformat(format="yuv420p")
+                    frames = self.stream_receiver.read()
                     
-                    for packet in streams[i].encode(av_frame):
-                        output_files[i].mux(packet)
+                    # check if frames is None, if so increment timeout counter and wait for 1 second
+                    if frames is None:
+                        sleep(1)
+                        timeout_counter += 1
+                        self.logger.warning(f"timeout while waiting for frames: {timeout_counter}/{bad_frames_timeout}")
+                        assert timeout_counter < bad_frames_timeout, f"timeout while waiting for frames"
+                        continue
+                    
+                    timeout_counter = 0
+                    collected_frames += 1
+                    
+                    for (i, cam) in enumerate(self.cameras):
+                        
+                        av_frame = av.VideoFrame.from_ndarray(frames[cam.device_id].frame, format="rgb24")
+                        av_frame = av_frame.reformat(format="yuv420p")
+                        
+                        for packet in streams[i].encode(av_frame):
+                            output_files[i].mux(packet)
+                    
+                    tqdm_bar.update(1)
                 
-                self.logger.info(f"writing {collected_frames}/{frames_to_collect} frames")
-            
             # flush the encoder
-            for i in range(len(self.cameras)):
+            for i in tqdm.tqdm(range(len(self.cameras)), desc="flushing encoder"):
                 for packet in streams[i].encode():
                     output_files[i].mux(packet)
             
             self.logger.info(f"video saved !")
             
         except Exception as e:
-            # self.logger.error(f"Error while saving video: {e}")
             raise e
         finally:
             self.logger.info("closing video files ...")
             for of in output_files:
                 of.close()
+            self.logger.info("video files closed")
 
 class ImageSaver:
     
@@ -155,10 +157,10 @@ class ImageSaver:
         self.futures = []
         
         # create directories if not exist
-        for image_file in self.image_files:
+        for image_file in tqdm.tqdm(self.image_files, desc="creating directories"):
             if not os.path.exists(image_file.file_path):
                 os.makedirs(image_file.file_path)
-                self.logger.info(f"directory {image_file.file_path} created")
+                self.logger.debug(f"directory {image_file.file_path} created")
         
         
     def start(self):
@@ -223,7 +225,7 @@ class ImageSaver:
         self.logger.debug(f"not-ready process results in queue: {len(self.futures)}")
         
         # save images
-        self.logger.info(f"saving images {image_name} ...")
+        self.logger.debug(f"saving images {image_name} ...")
         for (i, camera) in enumerate(self.cameras):
             cam_id = camera.device_id
             result = self.pool.apply_async(ImageSaver._save_image, (frames[cam_id].frame, self.image_files[i], image_name))
@@ -235,15 +237,19 @@ class ImageSaver:
         
         saved_images = 0
         timeout_counter = 0
-        while saved_images < number_of_images:
-            
-            ok = self.save_image(f"{datetime.now().strftime('%Y-%m-%d_%H-%M-%S-%f')}")
-            if not ok:
-                sleep(1)
-                timeout_counter += 1
-                self.logger.info(f"timeout while waiting for frames: {timeout_counter}/{bad_frames_timeout}")
-                assert timeout_counter < bad_frames_timeout, f"timeout while waiting for frames"
-                continue
-            
-            timeout_counter = 0
-            saved_images += 1
+        
+        with tqdm.tqdm(total=number_of_images, desc="saving images") as tqdm_bar:
+            while saved_images < number_of_images:
+                
+                ok = self.save_image(f"{datetime.now().strftime('%Y-%m-%d_%H-%M-%S-%f')}")
+                if not ok:
+                    sleep(1)
+                    timeout_counter += 1
+                    self.logger.info(f"timeout while waiting for frames: {timeout_counter}/{bad_frames_timeout}")
+                    assert timeout_counter < bad_frames_timeout, f"timeout while waiting for frames"
+                    continue
+                
+                timeout_counter = 0
+                saved_images += 1
+                
+                tqdm_bar.update(1)

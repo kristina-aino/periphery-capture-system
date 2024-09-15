@@ -86,23 +86,19 @@ class FFMPEGReader(ABC):
         self.logger.info(f"Starting ...")
         
         assert not self.is_active(), f"Trying to start a reader that has already been started ..."
+    
+        # set container
+        self.container = av.open(file=file_string, format='dshow', options=options)
         
-        try:
-            # set container
-            self.container = av.open(file=file_string, format='dshow', options=options)
-            
-            self.logger.debug(f"Open Container with options: {options}")
-            
-            # set stream (audio or video)
-            if self.device.device_type == "audio":
-                self.stream = self.container.streams.audio[0]
-            elif self.device.device_type == "video":
-                self.stream = self.container.streams.video[0]
-            else:
-                raise Exception("No audio or video stream found ...")
-            
-        except Exception as e:
-            self.stop()
+        self.logger.debug(f"Open Container with options: {options}")
+        
+        # set stream (audio or video)
+        if self.device.device_type == "audio":
+            self.stream = self.container.streams.audio[0]
+        elif self.device.device_type == "video":
+            self.stream = self.container.streams.video[0]
+        else:
+            raise Exception("No audio or video stream found ...")
         
         self.logger.info(f"started !")
     

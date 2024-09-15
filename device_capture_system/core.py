@@ -1,7 +1,7 @@
 import time
 import numpy as np
 
-from typing import List, Callable
+from typing import Dict, Callable, List
 from time import sleep
 from logging import getLogger
 from concurrent.futures import ThreadPoolExecutor
@@ -59,13 +59,14 @@ class InputStreamSender:
         except ProcessTimeoutError:
             self.logger.warning("process join timeout, terminating ...")
             self.process.terminate()
+            self.process.join()
         
         self.process = None
         
     def _run(self):
         
         # crteate zmq sender
-        zmq_sender = ZMQSender(host=self.host, port=self.proxy_port, q_size=self.zmq_sender_queue_size)
+        zmq_sender = ZMQSender(host=self.host, port=self.proxy_port, q_size=self.zmq_sender_queue_size, name=self.device.name)
         
         # create device reader
         if isinstance(self.device, CameraDevice):
@@ -122,17 +123,20 @@ class InputStreamReceiver:
         self.logger = getLogger(f"{self.__class__.__name__}" )
         self.devices = devices
         self.zmq_receiver = ZMQReceiver(host=host, port=proxy_pub_port, q_size=zmq_receiver_queue_size)
+        self.running = False
     
     def start(self):
+        self.running = True
         self.zmq_receiver.start()
         
     def stop(self):
+        self.running = False
         self.zmq_receiver.stop()
         
     def read(self, read_attemps: int = 10):
         output = {}
         
-        while len(output) < len(self.devices):
+        while len(output) < len(self.devices) and self.running:
             
             if read_attemps <= 0:
                 return None
@@ -161,17 +165,19 @@ class MultiInputStreamSender:
         host: str = "127.0.0.1", 
         zmq_proxy_queue_size: int = 10,
         zmq_sender_queue_size: int = 10,
-        frame_preprocessings: List[FramePreprocessing] = []):
+        frame_preprocessings: Dict[str, FramePreprocessing] = []):
         self.logger = getLogger(self.__class__.__name__)
         
-        frame_preprocessings = [*frame_preprocessings, *[None] * (len(devices) - len(frame_preprocessings))]
-        
-        self.input_sender = [InputStreamSender(
-            device = device, 
-            proxy_sub_port = proxy_sub_port, 
-            host = host,
-            zmq_sender_queue_size = zmq_sender_queue_size,
-            frame_preprocessing = frame_preprop) for (device, frame_preprop) in zip(devices, frame_preprocessings)]
+        self.input_sender = [
+            InputStreamSender(
+                device = device, 
+                proxy_sub_port = proxy_sub_port, 
+                host = host,
+                zmq_sender_queue_size = zmq_sender_queue_size,
+                frame_preprocessing = frame_preprocessings.get(device.name, None)
+            ) 
+            for device in devices
+        ]
         self.zmq_proxy = ZMQProxy(host, sub_port=proxy_sub_port, pub_port=proxy_pub_port, queue_size=zmq_proxy_queue_size)
         
         self.logger.info(f"multi input stream sender with {len(self.input_sender)} senders")
@@ -181,7 +187,7 @@ class MultiInputStreamSender:
         self.zmq_proxy.start_process()
         
         # start all input senders in parallel
-        thread_pool_executor = ThreadPoolExecutor(max_workers=len(self.input_sender)*2)
+        thread_pool_executor = ThreadPoolExecutor(max_workers=len(self.input_sender))
         
         futures = [thread_pool_executor.submit(sub.start_process) for sub in self.input_sender]
         
