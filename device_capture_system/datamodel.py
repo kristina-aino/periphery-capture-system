@@ -28,14 +28,12 @@ class CameraDevice(PeripheryDevice):
     width: Annotated[StrictInt, Field(ge=640, le=3840)]
     height: Annotated[StrictInt, Field(ge=480, le=2160)]
     fps: Annotated[StrictFloat, Field(ge=15, le=120)]
-    # pixel_format: StrictNonEmptyStr
-    # vcodec: StrictNonEmptyStr
+    pixel_format: StrictNonEmptyStr
 
 class AudioDevice(PeripheryDevice):
     channels: Annotated[StrictInt, Field(ge=1)]
     sample_rate: Annotated[StrictInt, Field(ge=8000, le=192000)] # sample rate in Hz
     sample_size: Annotated[StrictInt, Field(ge=8, le=32)] # sample size in bits
-    audio_buffer_size: Annotated[StrictInt, Field(ge=1)] # size of audio buffer in ms
 
 # ---------- MEDIA CLASSES ----------
 

@@ -2,16 +2,18 @@ import av
 import re
 import concurrent.futures as concurrent_futures
 import subprocess
+import pydantic
 
 # from capture_devices import devices
 from json import dump as json_dump
 from json import load as json_load
-from typing import List
+from typing import List, Union
 from abc import ABC, abstractmethod
 from logging import getLogger
 from logging import getLogger
 from datetime import datetime
 from traceback import format_exc
+from numpy import unique
 
 from .datamodel import FramePacket
 from .datamodel import PeripheryDevice, CameraDevice, AudioDevice
@@ -29,13 +31,78 @@ def get_all_devices_ffmpeg(os: str = "windows"):
         raise NotImplementedError("Only windows (dshow) is supported for now ...")
     
     # Get list of input devices
-    devices = subprocess.run(["ffmpeg", "-sources", "dshow"], capture_output=True, text=True).stdout
+    raw_ffmpeg_string = subprocess.run(["ffmpeg", "-sources", "dshow"], capture_output=True, text=True).stdout
     
-    names = [a[1:-1] for a in re.findall(r"\[.*\]", devices)]
-    device_ids = [f"@{a[1:-2]}" for a in re.findall(r"\@.*\[", devices)]
-    device_types = [a[3:-1] for a in re.findall(r"\].*\(.*.\)", devices)]
+    device_info_raw = re.findall(r"\@.*\[.*\].*\(.*\)", raw_ffmpeg_string)
+    device_names = [re.findall(r"\[.*\]", a)[0][1:-1] for a in device_info_raw]
+    device_ids = [re.findall(r"\@.*\[", a)[0][:-2] for a in device_info_raw]
+    device_types = [re.findall(r"video|audio", a)[0] for a in device_info_raw]
     
-    return [PeripheryDevice(device_id=device_id, name=name, device_type=device_type) for name, device_id, device_type in zip(names, device_ids, device_types)]
+    return [
+        PeripheryDevice(device_id=device_id, name=name, device_type=device_type) 
+        for name, device_id, device_type 
+        in zip(device_names, device_ids, device_types)
+    ]
+
+def get_video_device_configurations(device: PeripheryDevice) -> CameraDevice:
+    """Query available configurations for a video device using ffmpeg"""
+
+    print("INFO: only works with dshow, atm ...")
+
+    cmd = ["ffmpeg", "-f", "dshow", "-list_options", "true", "-i", f"video={device.device_id}"]
+    result = subprocess.run(cmd, capture_output=True, text=True).stderr
+    
+    configurations_raw = re.findall(r"pixel_format=(\w+)\s*min s=(\d+)x(\d+)\s*fps=(\d+)", result)
+
+    configurations = list(set(
+        [*map(lambda cfg: tuple([cfg[0].strip(), *map(int, cfg[1:])]), configurations_raw)]
+    ))
+    
+    configurations.sort(key=lambda x: -(x[1] * x[2])) # sort by resolution
+    
+    field_names = ["pixel_format", "width", "height", "fps"]
+    configurations_out = []
+    for cfg in configurations:
+        try:
+
+            configurations_out.append(
+                CameraDevice(**device.model_dump(), **dict(zip(field_names, cfg)))
+            )
+
+        except pydantic.ValidationError as e:
+            print("video config was droped because of validation error: ")
+            continue
+
+    return configurations_out
+
+
+def get_audio_device_configurations(device: PeripheryDevice) -> AudioDevice:
+    """Query available configurations for an audio device using ffmpeg"""
+
+    cmd = ["ffmpeg", "-f", "dshow", "-list_options", "true", "-i", f"audio={device.device_id}"]
+    result = subprocess.run(cmd, capture_output=True, text=True).stderr
+    
+    configurations_raw = re.findall(r".*?ch=\s*(\w+),\s*bits=\s*(\d+),\s*rate=\s*(\d+)", result)
+
+    configurations = list(set(
+        [*map(lambda cfg: tuple([*map(int, cfg)]), configurations_raw)]
+    ))
+
+    configurations.sort(key=lambda x: -x[2]) # sort by sample rate
+
+    field_names = ["channels", "sample_size", "sample_rate"]
+    configurations_out = []
+    for cfg in configurations:
+        try:
+            configurations_out.append(
+                AudioDevice(**device.model_dump(), **dict(zip(field_names, cfg)))
+            )
+        except pydantic.ValidationError as e:
+            print("audio config was droped because of validation error: ")
+            continue
+
+    return configurations_out
+
 
 def save_periphery_devices_to_config(devices: List[PeripheryDevice], config_file: str = "./raw_devices.json"):
     with open(config_file, "w") as f:
@@ -54,6 +121,8 @@ def load_all_devices_from_config(device_type: str, config_file: str = "./configs
         return [AudioDevice(**device) for device in audio_devices]
     else:
         raise ValueError("device_type must be either 'video' or 'audio' ...")
+
+
 
 # ------------------- BASE CLASS ------------------- #
 
@@ -157,8 +226,7 @@ class CameraDeviceReader(FFMPEGReader):
             options={
                 'video_size': f'{self.device.width}x{self.device.height}', 
                 'framerate': f'{self.device.fps}/1',
-                # 'pixel_format': f'{self.device.pixel_format}',
-                # 'vcodec': f'{self.device.vcodec}'
+                'pixel_format': f'{self.device.pixel_format}',
             },
             format='dshow'
         )
@@ -174,7 +242,7 @@ class AudioDeviceReader(FFMPEGReader):
                 'ar': f'{self.device.sample_rate}',
                 'channels': f'{self.device.channels}',
                 'sample_size': f'{self.device.sample_size}',
-                'audio_buffer_size': f'{self.device.audio_buffer_size}'
+                # 'audio_buffer_size': f'{self.device.audio_buffer_size}'
             },
             format='dshow',
         )

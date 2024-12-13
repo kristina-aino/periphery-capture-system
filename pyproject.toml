@@ -2,7 +2,7 @@
 name = "device-capture-system"
 version = "1.1.0"
 description = "device capture system to capture and maintain connection to multiple cameras and microphone to send data over zmq"
-authors = ["freya-aino <freya.aino@proton.me>"]
+authors = ["freya-aino <freya.aino@pm.me>"]
 readme = "README.md"
 packages = [{include = "device_capture_system"}]
 
