@@ -33,7 +33,8 @@ def test_camera_device(periphery_device):
         **periphery_device.model_dump(),
         width=640,
         height=480,
-        fps=30
+        fps=30,
+        pixel_format="rgb24"
     )
 
 def test_audio_device(periphery_device):
@@ -42,7 +43,6 @@ def test_audio_device(periphery_device):
         sample_rate=44100,
         channels=1,
         sample_size=16,
-        audio_buffer_size=100
     )
 
 # ---------- MEDIA CLASSES ----------
@@ -50,6 +50,8 @@ def test_audio_device(periphery_device):
 def test_video_file(media_file):
     datamodel.VideoFile(
         **media_file.model_dump(),
+        width=640,
+        height=480,
         fps=30,
         seconds=10,
         codec="mp4v"

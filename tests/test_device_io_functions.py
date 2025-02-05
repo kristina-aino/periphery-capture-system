@@ -39,7 +39,8 @@ def mock_devices_file(tmp_path):
             "device_type": "video",
             "width": 1920,
             "height": 1080,
-            "fps": 30
+            "fps": 30,
+            "pixel_format": "rgb24"
             
         },
         {
@@ -49,7 +50,6 @@ def mock_devices_file(tmp_path):
             "channels": 1,
             "sample_rate": 16000,
             "sample_size": 16,
-            "audio_buffer_size": 100
         },
     ]
     file = tmp_path / "devices.json"
