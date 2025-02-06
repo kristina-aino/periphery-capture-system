@@ -10,7 +10,7 @@ packages = [{include = "device_capture_system"}]
 python = "^3.10"
 pyzmq = "^25.1"
 opencv-python = "^4.8"
-numpy = "^1.26"
+numpy = "^2.2"
 pydantic = "^2.5"
 av = "^12.1.0"
 progress = "^1.6"
